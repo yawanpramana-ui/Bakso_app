@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BaksoSpot, HunterProfile } from './types';
+import { BaksoSpot, HunterProfile, Party } from './types';
 import { INITIAL_BAKSO_SPOTS } from './data/initialSpots';
 import { BaksoMap } from './components/BaksoMap';
 import { BaksoHudNavbar } from './components/BaksoHudNavbar';
@@ -11,8 +11,31 @@ import { GameSettingsModal } from './components/GameSettingsModal';
 import { HomeScreenModal } from './components/HomeScreenModal';
 import { SystemBadgesModal } from './components/SystemBadgesModal';
 import { LevelUpModal } from './components/LevelUpModal';
+import { MultiplayerPartyModal } from './components/MultiplayerPartyModal';
 import { soundFx } from './utils/audio';
+import {
+  auth,
+  db,
+  signInAnonymously,
+  signInWithPopup,
+  googleProvider,
+  onAuthStateChanged,
+  doc,
+  setDoc,
+  getDoc,
+  onSnapshot,
+  collection,
+  query,
+  where,
+  addDoc,
+  deleteDoc,
+  updateDoc,
+  arrayUnion,
+  arrayRemove,
+} from './lib/firebase';
+import { getDocs } from 'firebase/firestore';
 import { Navigation } from 'lucide-react';
+
 
 const STORAGE_KEY_SPOTS = 'bakso_quest_spots_v1';
 const STORAGE_KEY_PROFILE = 'bakso_quest_profile_v1';
@@ -76,10 +99,216 @@ export default function App() {
   const [gpsConfirmCoords, setGpsConfirmCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [levelUpInfo, setLevelUpInfo] = useState<{ newLevel: number; newTitle: string } | null>(null);
 
+  // Firebase Auth & Multiplayer Party States
+  const [currentUser, setCurrentUser] = useState<{
+    uid: string;
+    isAnonymous: boolean;
+    email?: string | null;
+    displayName?: string | null;
+  } | null>(null);
+  const [currentParty, setCurrentParty] = useState<Party | null>(null);
+  const [isMultiplayerModalOpen, setIsMultiplayerModalOpen] = useState<boolean>(false);
+
   // Map state
   const [mapCenter, setMapCenter] = useState<[number, number]>([-6.2088, 106.8456]);
   const [pendingCoords, setPendingCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [isAddingMode, setIsAddingMode] = useState<boolean>(false);
+
+  // Firebase Auth Listener & User Sync
+  useEffect(() => {
+    let partyUnsub: (() => void) | null = null;
+    let userUnsub: (() => void) | null = null;
+
+    const authUnsub = onAuthStateChanged(auth, async (user) => {
+      if (partyUnsub) {
+        partyUnsub();
+        partyUnsub = null;
+      }
+      if (userUnsub) {
+        userUnsub();
+        userUnsub = null;
+      }
+
+      if (user) {
+        setCurrentUser({
+          uid: user.uid,
+          isAnonymous: user.isAnonymous,
+          email: user.email,
+          displayName: user.displayName,
+        });
+
+        // Sync profile document in Firestore and listen to user updates
+        try {
+          const userRef = doc(db, 'users', user.uid);
+          const userSnap = await getDoc(userRef);
+          if (!userSnap.exists()) {
+            await setDoc(userRef, {
+              uid: user.uid,
+              name: profile.name,
+              level: profile.level,
+              xp: profile.xp,
+              createdAt: new Date().toISOString(),
+            });
+          }
+
+          // Realtime user doc listener (tracks party changes)
+          userUnsub = onSnapshot(userRef, (docSnap) => {
+            if (docSnap.exists()) {
+              const uData = docSnap.data();
+              if (uData.currentPartyId) {
+                if (partyUnsub) partyUnsub();
+                partyUnsub = onSnapshot(doc(db, 'parties', uData.currentPartyId), (pSnap) => {
+                  if (pSnap.exists()) {
+                    setCurrentParty({ id: pSnap.id, ...pSnap.data() } as Party);
+                  } else {
+                    setCurrentParty(null);
+                  }
+                });
+              } else {
+                if (partyUnsub) {
+                  partyUnsub();
+                  partyUnsub = null;
+                }
+                setCurrentParty(null);
+              }
+            }
+          });
+        } catch {
+          // ignore
+        }
+      } else {
+        setCurrentUser(null);
+        setCurrentParty(null);
+        signInAnonymously(auth).catch(() => {});
+      }
+    });
+
+    return () => {
+      authUnsub();
+      if (userUnsub) userUnsub();
+      if (partyUnsub) partyUnsub();
+    };
+  }, []);
+
+  // Handle URL invite code parameters (e.g., ?party=BKSO7X)
+  useEffect(() => {
+    if (!currentUser) return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const inviteCodeParam = urlParams.get('party');
+    if (inviteCodeParam) {
+      handleJoinPartyByCode(inviteCodeParam);
+    }
+  }, [currentUser?.uid]);
+
+  // Real-time Firestore Spots Synchronization
+  useEffect(() => {
+    if (!currentUser) return;
+
+    try {
+      const spotsRef = collection(db, 'spots');
+      const q = currentParty?.id
+        ? query(spotsRef, where('partyId', '==', currentParty.id))
+        : query(spotsRef, where('ownerId', '==', currentUser.uid));
+
+      const unsubscribe = onSnapshot(
+        q,
+        (snapshot) => {
+          const firestoreSpots: BaksoSpot[] = [];
+          snapshot.forEach((docSnap) => {
+            firestoreSpots.push({ id: docSnap.id, ...docSnap.data() } as BaksoSpot);
+          });
+
+          if (firestoreSpots.length > 0) {
+            setSpots((prev) => {
+              const spotMap = new Map<string, BaksoSpot>();
+              prev.forEach((s) => spotMap.set(s.id, s));
+              firestoreSpots.forEach((s) => spotMap.set(s.id, s));
+              return Array.from(spotMap.values());
+            });
+          }
+        },
+        (err) => {
+          console.warn('Firestore subscription error:', err);
+        }
+      );
+
+      return () => unsubscribe();
+    } catch {
+      // ignore
+    }
+  }, [currentUser?.uid, currentParty?.id]);
+
+  // Multiplayer Party Functions
+  const handleLoginGoogle = async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+      soundFx.playSuccess();
+    } catch (err: any) {
+      console.warn('Google sign-in error:', err);
+    }
+  };
+
+  const handleCreateParty = async (partyName: string) => {
+    if (!currentUser) throw new Error('Pengguna belum terautentikasi.');
+    const inviteCode = 'BKSO' + Math.random().toString(36).substring(2, 4).toUpperCase();
+    const partyData = {
+      name: partyName,
+      ownerId: currentUser.uid,
+      memberIds: [currentUser.uid],
+      memberNames: { [currentUser.uid]: profile.name },
+      inviteCode,
+      createdAt: Date.now(),
+    };
+
+    const partyRef = await addDoc(collection(db, 'parties'), partyData);
+    await setDoc(doc(db, 'users', currentUser.uid), { currentPartyId: partyRef.id }, { merge: true });
+
+    setCurrentParty({
+      id: partyRef.id,
+      ...partyData,
+    });
+  };
+
+  const handleJoinPartyByCode = async (inviteCode: string): Promise<boolean> => {
+    if (!currentUser) return false;
+    const partyQuery = query(collection(db, 'parties'), where('inviteCode', '==', inviteCode.toUpperCase().trim()));
+    const partyDocs = await getDocs(partyQuery);
+
+    if (partyDocs.empty) return false;
+
+    const partyDoc = partyDocs.docs[0];
+    const partyData = partyDoc.data() as Party;
+
+    await updateDoc(doc(db, 'parties', partyDoc.id), {
+      memberIds: arrayUnion(currentUser.uid),
+      [`memberNames.${currentUser.uid}`]: profile.name,
+    });
+
+    await setDoc(doc(db, 'users', currentUser.uid), { currentPartyId: partyDoc.id }, { merge: true });
+
+    setCurrentParty({
+      ...partyData,
+      id: partyDoc.id,
+      memberIds: Array.from(new Set([...partyData.memberIds, currentUser.uid])),
+      memberNames: { ...partyData.memberNames, [currentUser.uid]: profile.name },
+    });
+
+    return true;
+  };
+
+  const handleLeaveParty = async () => {
+    if (!currentUser || !currentParty) return;
+    try {
+      await updateDoc(doc(db, 'parties', currentParty.id), {
+        memberIds: arrayRemove(currentUser.uid),
+      });
+      await setDoc(doc(db, 'users', currentUser.uid), { currentPartyId: null }, { merge: true });
+    } catch {
+      // ignore
+    }
+    setCurrentParty(null);
+  };
+
 
   // Helper for checking valid coordinates
   const isValidCoord = (latVal: any, lngVal: any): boolean => {
@@ -154,11 +383,14 @@ export default function App() {
   };
 
   // Save new spot
-  const handleSaveSpot = (newSpotData: Omit<BaksoSpot, 'id' | 'createdAt'>) => {
+  const handleSaveSpot = async (newSpotData: Omit<BaksoSpot, 'id' | 'createdAt'>) => {
     const newSpot: BaksoSpot = {
       ...newSpotData,
       id: `spot-${Date.now()}`,
       createdAt: Date.now(),
+      ownerId: currentUser?.uid || 'local',
+      partyId: currentParty?.id,
+      addedByName: profile.name,
     };
 
     setSpots((prev) => [newSpot, ...prev]);
@@ -170,6 +402,21 @@ export default function App() {
 
     setPendingCoords(null);
     setIsAddingMode(false);
+
+    // Save to Firestore Database
+    if (currentUser) {
+      try {
+        await addDoc(collection(db, 'spots'), {
+          ...newSpotData,
+          ownerId: currentUser.uid,
+          partyId: currentParty?.id || null,
+          addedByName: profile.name,
+          createdAt: Date.now(),
+        });
+      } catch {
+        // ignore
+      }
+    }
 
     // Award +100 XP
     addXp(100);
@@ -278,6 +525,9 @@ export default function App() {
       <BaksoHudNavbar
         profile={profile}
         spotCount={spots.length}
+        partyName={currentParty?.name}
+        currentUser={currentUser}
+        onOpenMultiplayer={() => setIsMultiplayerModalOpen(true)}
         onOpenHomeScreen={() => setIsHomeScreenOpen(true)}
         onOpenBadges={() => setIsBadgesOpen(true)}
         onOpenProfile={() => setIsProfileModalOpen(true)}
@@ -480,6 +730,24 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Multiplayer Party & Auth Modal */}
+      <MultiplayerPartyModal
+        isOpen={isMultiplayerModalOpen}
+        onClose={() => setIsMultiplayerModalOpen(false)}
+        currentUser={currentUser}
+        currentParty={currentParty}
+        profile={profile}
+        spots={spots}
+        onLoginGoogle={handleLoginGoogle}
+        onCreateParty={handleCreateParty}
+        onJoinPartyByCode={handleJoinPartyByCode}
+        onLeaveParty={handleLeaveParty}
+        onOpenAddModal={() => {
+          setIsMultiplayerModalOpen(false);
+          setIsAddModalOpen(true);
+        }}
+      />
 
       {/* Level Up Celebratory Modal */}
       {levelUpInfo && (

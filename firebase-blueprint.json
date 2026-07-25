@@ -1,0 +1,60 @@
+{
+  "entities": {
+    "users": {
+      "title": "User",
+      "description": "Hunter user profiles",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "avatarExpression": { "type": "string" },
+        "level": { "type": "number" },
+        "xp": { "type": "number" },
+        "nextLevelXp": { "type": "number" },
+        "title": { "type": "string" },
+        "currentPartyId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid", "name"]
+    },
+    "parties": {
+      "title": "Party",
+      "description": "Multiplayer party rooms for sharing Bakso spots",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberIds": { "type": "array", "items": { "type": "string" } },
+        "inviteCode": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "ownerId", "memberIds", "inviteCode"]
+    },
+    "spots": {
+      "title": "BaksoSpot",
+      "description": "Bakso spots logged by users or shared within a party",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "partyId": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "description": { "type": "string" },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "rating": { "type": "number" },
+        "sambalLevel": { "type": "number" },
+        "priceMin": { "type": "number" },
+        "priceMax": { "type": "number" },
+        "hasKrupuk": { "type": "boolean" },
+        "hasEsTeh": { "type": "boolean" },
+        "addedBy": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "ownerId", "name", "lat", "lng", "rating", "sambalLevel"]
+    }
+  }
+}

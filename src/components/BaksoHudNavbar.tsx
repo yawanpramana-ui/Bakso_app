@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { HunterProfile } from '../types';
 import { soundFx } from '../utils/audio';
-import { Shield, BookOpen, Plus, Volume2, VolumeX, Tv, Compass, Settings, Home, Award } from 'lucide-react';
+import { Shield, BookOpen, Plus, Volume2, VolumeX, Tv, Compass, Settings, Home, Award, Maximize2, Minimize2, Users } from 'lucide-react';
 
 interface BaksoHudNavbarProps {
   profile: HunterProfile;
   spotCount: number;
+  partyName?: string | null;
+  currentUser?: { uid: string; isAnonymous: boolean; email?: string | null; displayName?: string | null } | null;
+  onOpenMultiplayer: () => void;
   onOpenHomeScreen: () => void;
   onOpenBadges: () => void;
   onOpenProfile: () => void;
@@ -20,6 +23,9 @@ interface BaksoHudNavbarProps {
 export const BaksoHudNavbar: React.FC<BaksoHudNavbarProps> = ({
   profile,
   spotCount,
+  partyName,
+  currentUser,
+  onOpenMultiplayer,
   onOpenHomeScreen,
   onOpenBadges,
   onOpenProfile,
@@ -31,10 +37,27 @@ export const BaksoHudNavbar: React.FC<BaksoHudNavbarProps> = ({
   onResetView,
 }) => {
   const [isMuted, setIsMuted] = useState(soundFx.getMuted());
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
 
   const handleToggleMute = () => {
     const muted = soundFx.toggleMute();
     setIsMuted(muted);
+  };
+
+  const handleToggleFullscreen = () => {
+    soundFx.playClick();
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().then(() => {
+        setIsFullscreen(true);
+      }).catch(() => {});
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().then(() => {
+          setIsFullscreen(false);
+        }).catch(() => {});
+      }
+    }
   };
 
   return (
@@ -77,11 +100,69 @@ export const BaksoHudNavbar: React.FC<BaksoHudNavbarProps> = ({
               soundFx.playClick();
               onOpenHomeScreen();
             }}
-            title="Buka Layar Utama"
+            title="Buka Layar Utama Full Screen"
             className="p-2 rounded-lg bg-[#5d4037] hover:bg-[#725146] border border-[#ffd700] text-[#ffd700] transition-all active:scale-95 flex items-center gap-1 text-xs font-bold"
           >
             <Home className="w-4 h-4 text-[#ffd700]" />
             <span className="font-pixel text-[10px] hidden lg:inline">Layar Utama</span>
+          </button>
+
+          {/* Multiplayer Squad Button */}
+          <button
+            onClick={() => {
+              soundFx.playClick();
+              onOpenMultiplayer();
+            }}
+            title="Grup Squad & Share Lokasi Invite"
+            className={`p-2 rounded-lg border transition-all active:scale-95 flex items-center gap-1 text-xs font-bold ${
+              partyName
+                ? 'bg-emerald-800 hover:bg-emerald-700 border-emerald-300 text-white shadow-md'
+                : 'bg-[#5d4037] hover:bg-[#725146] border-[#ffd700] text-[#ffd700]'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span className="font-pixel text-[10px] hidden md:inline">
+              {partyName ? `Squad: ${partyName}` : '⚔️ Squad Multiplayer'}
+            </span>
+          </button>
+
+          {/* User Auth Status Badge */}
+          <button
+            onClick={() => {
+              soundFx.playClick();
+              onOpenMultiplayer();
+            }}
+            title={
+              currentUser && !currentUser.isAnonymous
+                ? `Terhubung Akun Google: ${currentUser.email || currentUser.displayName || 'Google ID'}`
+                : 'Masih Akun Tamu (Klik untuk Hubungkan Akun Google)'
+            }
+            className={`px-2.5 py-1.5 rounded-lg border transition-all active:scale-95 flex items-center gap-1.5 text-xs font-bold ${
+              currentUser && !currentUser.isAnonymous
+                ? 'bg-emerald-950 hover:bg-emerald-900 border-emerald-500 text-emerald-300'
+                : 'bg-amber-950 hover:bg-amber-900 border-amber-600 text-amber-300'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full animate-pulse bg-current" />
+            <span className="font-pixel text-[10px] hidden lg:inline">
+              {currentUser && !currentUser.isAnonymous
+                ? `Google: ${currentUser.email?.split('@')[0] || 'Logged In'}`
+                : 'Akun Tamu'}
+            </span>
+          </button>
+
+          {/* Toggle Fullscreen Browser */}
+          <button
+            onClick={handleToggleFullscreen}
+            title="Layar Penuh Aplikasi (Browser Fullscreen)"
+            className="p-2 rounded-lg bg-[#5d4037] hover:bg-[#725146] border border-[#ffd700] text-emerald-400 transition-all active:scale-95 flex items-center gap-1 text-xs font-bold"
+          >
+            {isFullscreen ? (
+              <Minimize2 className="w-4 h-4 text-emerald-400" />
+            ) : (
+              <Maximize2 className="w-4 h-4 text-emerald-400" />
+            )}
+            <span className="font-pixel text-[10px] hidden xl:inline">Full Screen</span>
           </button>
 
           {/* System Badges & Achievements Button */}

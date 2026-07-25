@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { BaksoSpot, HunterProfile } from '../types';
 import { CharacterAvatar } from './CharacterAvatar';
 import { soundFx } from '../utils/audio';
@@ -16,7 +16,10 @@ import {
   Star,
   ChevronRight,
   X,
-  Play
+  Play,
+  Maximize2,
+  Minimize2,
+  Monitor
 } from 'lucide-react';
 
 interface HomeScreenModalProps {
@@ -44,6 +47,9 @@ export const HomeScreenModal: React.FC<HomeScreenModalProps> = ({
   onOpenSettings,
   onSelectSpot,
 }) => {
+  const [isFullScreenView, setIsFullScreenView] = useState<boolean>(true);
+  const [isBrowserFullscreen, setIsBrowserFullscreen] = useState<boolean>(false);
+
   if (!isOpen) return null;
 
   const totalSpots = spots.length;
@@ -53,31 +59,89 @@ export const HomeScreenModal: React.FC<HomeScreenModalProps> = ({
   // Recommended / Top 5-star spots
   const topSpots = spots.filter((s) => s.rating >= 4).slice(0, 3);
 
+  const toggleBrowserFullscreen = () => {
+    soundFx.playClick();
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().then(() => {
+        setIsBrowserFullscreen(true);
+      }).catch(() => {});
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().then(() => {
+          setIsBrowserFullscreen(false);
+        }).catch(() => {});
+      }
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/90 backdrop-blur-md overflow-y-auto">
-      <div className="relative w-full max-w-4xl bg-[#1e1726] border-4 border-[#ffd700] rounded-3xl shadow-2xl p-4 sm:p-6 text-amber-100 my-auto max-h-[95vh] overflow-y-auto pixel-border-gold">
-        
+    <div
+      className={
+        isFullScreenView
+          ? 'fixed inset-0 z-50 bg-[#1e1726] overflow-y-auto p-4 sm:p-8 text-amber-100 font-pixel animate-fade-in'
+          : 'fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/90 backdrop-blur-md overflow-y-auto font-pixel animate-fade-in'
+      }
+    >
+      <div
+        className={
+          isFullScreenView
+            ? 'relative w-full max-w-6xl mx-auto space-y-5 pb-12'
+            : 'relative w-full max-w-4xl bg-[#1e1726] border-4 border-[#ffd700] rounded-3xl shadow-2xl p-4 sm:p-6 text-amber-100 my-auto max-h-[95vh] overflow-y-auto pixel-border-gold space-y-5'
+        }
+      >
         {/* Top Header Controls */}
-        <div className="flex items-center justify-between border-b-2 border-amber-800/80 pb-3 mb-4">
+        <div className="flex flex-wrap items-center justify-between border-b-2 border-amber-800/80 pb-3 gap-2">
           <div className="flex items-center gap-2">
-            <span className="bg-[#ffd700] text-[#2d1b15] font-pixel text-[10px] px-2 py-0.5 rounded font-bold border border-amber-900">
-              LAYAR UTAMA
+            <span className="bg-[#ffd700] text-[#2d1b15] font-pixel text-[10px] px-2.5 py-1 rounded font-bold border border-amber-900 shadow">
+              LAYAR UTAMA FULLSCREEN
             </span>
-            <span className="text-xs font-arcade text-amber-300">
+            <span className="text-xs font-arcade text-amber-300 hidden sm:inline">
               Bakso Quest RPG Hub
             </span>
           </div>
 
-          <button
-            onClick={() => {
-              soundFx.playClick();
-              onClose();
-            }}
-            className="px-3 py-1.5 rounded-xl bg-amber-950 hover:bg-red-950 border border-amber-700 text-amber-300 font-pixel text-xs flex items-center gap-1 transition-colors"
-          >
-            <span>Tutup & Peta</span>
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Toggle Fullscreen Layout */}
+            <button
+              onClick={() => {
+                soundFx.playClick();
+                setIsFullScreenView(!isFullScreenView);
+              }}
+              title={isFullScreenView ? 'Ubah ke Mode Jendela Modal' : 'Ubah ke Layar Utama Full Screen'}
+              className="px-3 py-1.5 rounded-xl bg-[#281f33] hover:bg-amber-900 border border-amber-600 text-amber-200 font-pixel text-xs flex items-center gap-1.5 transition-colors"
+            >
+              <Monitor className="w-4 h-4 text-[#ffd700]" />
+              <span className="hidden sm:inline">
+                {isFullScreenView ? 'Mode Jendela' : 'Mode Full Screen'}
+              </span>
+            </button>
+
+            {/* Toggle Real Browser Fullscreen */}
+            <button
+              onClick={toggleBrowserFullscreen}
+              title="Layar Penuh Browser (Fullscreen API)"
+              className="px-3 py-1.5 rounded-xl bg-emerald-950 hover:bg-emerald-900 border border-emerald-500 text-emerald-300 font-pixel text-xs flex items-center gap-1.5 transition-colors"
+            >
+              {isBrowserFullscreen ? (
+                <Minimize2 className="w-4 h-4 text-emerald-400" />
+              ) : (
+                <Maximize2 className="w-4 h-4 text-emerald-400" />
+              )}
+              <span className="hidden sm:inline">Browser Fullscreen</span>
+            </button>
+
+            {/* Close / Return to Map */}
+            <button
+              onClick={() => {
+                soundFx.playClick();
+                onClose();
+              }}
+              className="px-3.5 py-1.5 rounded-xl bg-[#800000] hover:bg-red-900 border-2 border-[#ffd700] text-[#ffd700] font-pixel text-xs font-bold flex items-center gap-1 transition-colors shadow"
+            >
+              <span>Jelajah Peta</span>
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Hero Banner Section */}

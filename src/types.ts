@@ -36,6 +36,9 @@ export interface BaksoSpot {
   visitDate: string;
   tags: string[];
   createdAt: number;
+  ownerId?: string;
+  partyId?: string;
+  addedByName?: string;
 }
 
 export interface Achievement {
@@ -58,3 +61,14 @@ export interface HunterProfile {
   nextLevelXp: number;
   favoriteType: string;
 }
+
+export interface Party {
+  id: string;
+  name: string;
+  ownerId: string;
+  memberIds: string[];
+  memberNames?: { [uid: string]: string };
+  inviteCode: string;
+  createdAt: number;
+}
+
