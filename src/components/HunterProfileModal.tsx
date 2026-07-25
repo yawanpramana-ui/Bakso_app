@@ -115,20 +115,20 @@ export const HunterProfileModal: React.FC<HunterProfileModalProps> = ({
           <div className="flex flex-col sm:flex-row items-center gap-4">
             <CharacterAvatar expression={profile.avatarExpression} size="xl" />
 
-            <div className="flex-1 text-center sm:text-left w-full">
+            <div className="flex-1 text-center sm:text-left w-full min-w-0">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1">
                 <input
                   type="text"
                   value={profile.name}
                   onChange={(e) => onUpdateProfile({ name: e.target.value })}
-                  className="bg-transparent text-xl font-pixel text-amber-300 border-b border-dashed border-amber-600 focus:border-amber-300 outline-none w-full sm:w-auto"
+                  className="bg-transparent text-xl font-pixel text-amber-300 border-b border-dashed border-amber-600 focus:border-amber-300 outline-none w-full sm:max-w-[280px] truncate"
                 />
-                <span className="text-xs font-pixel text-[#ffd700] bg-[#800000] px-3 py-1 rounded-lg border-2 border-[#ffd700] shrink-0 font-bold shadow-md">
+                <span className="text-xs font-pixel text-[#ffd700] bg-[#800000] px-3 py-1 rounded-lg border-2 border-[#ffd700] shrink-0 font-bold shadow-md self-center sm:self-auto">
                   LEVEL {profile.level}
                 </span>
               </div>
 
-              <p className="text-xs font-pixel text-amber-200/90 mb-3">
+              <p className="text-xs font-pixel text-amber-200/90 mb-3 break-words">
                 GELAR / TITLE: <strong className="text-[#ffd700]">{currentLevelTitle}</strong>
               </p>
 

@@ -76,8 +76,8 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({
               <Trophy className="w-4 h-4" />
             </div>
           </div>
-          <span className="text-xs text-amber-200/90 font-bold tracking-wide mt-1">
-            PEMBURU BAKSO: <span className="text-white">{profileName}</span>
+          <span className="text-xs text-amber-200/90 font-bold tracking-wide mt-1 break-words max-w-full">
+            PEMBURU BAKSO: <span className="text-white break-words">{profileName}</span>
           </span>
         </div>
 
@@ -87,10 +87,10 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({
             <Award className="w-3.5 h-3.5 text-[#ffd700]" />
             <span>GELAR DIBUKA / UNLOCKED TITLE</span>
           </div>
-          <div className="text-base sm:text-lg font-bold text-[#ffd700] drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] flex items-center justify-center gap-2">
-            <Star className="w-5 h-5 text-amber-300 fill-amber-300 animate-bounce" />
-            <span>{newTitle}</span>
-            <Star className="w-5 h-5 text-amber-300 fill-amber-300 animate-bounce" />
+          <div className="text-base sm:text-lg font-bold text-[#ffd700] drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] flex flex-wrap items-center justify-center gap-2 break-words">
+            <Star className="w-5 h-5 text-amber-300 fill-amber-300 animate-bounce shrink-0" />
+            <span className="break-words max-w-full">{newTitle}</span>
+            <Star className="w-5 h-5 text-amber-300 fill-amber-300 animate-bounce shrink-0" />
           </div>
         </div>
 

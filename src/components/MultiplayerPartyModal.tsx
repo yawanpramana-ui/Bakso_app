@@ -262,19 +262,19 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
               <UserCheck className="w-4 h-4" />
             </div>
             <div>
-              <div className="text-amber-200 font-bold flex items-center gap-1.5">
-                <span>Pemain: {profile.name}</span>
+              <div className="text-amber-200 font-bold flex flex-wrap items-center gap-1.5">
+                <span className="truncate max-w-[160px] sm:max-w-[240px]">Pemain: {profile.name}</span>
                 {currentUser?.isAnonymous ? (
-                  <span className="text-[9px] bg-amber-950 text-amber-400 px-2 py-0.5 rounded border border-amber-800">
+                  <span className="text-[9px] bg-amber-950 text-amber-400 px-2 py-0.5 rounded border border-amber-800 shrink-0">
                     Akun Tamu (Anonim)
                   </span>
                 ) : (
-                  <span className="text-[9px] bg-emerald-950 text-emerald-400 px-2 py-0.5 rounded border border-emerald-700">
+                  <span className="text-[9px] bg-emerald-950 text-emerald-400 px-2 py-0.5 rounded border border-emerald-700 shrink-0">
                     Google Connected
                   </span>
                 )}
               </div>
-              <p className="text-[10px] text-amber-400/80 mt-0.5">
+              <p className="text-[10px] text-amber-400/80 mt-0.5 break-all sm:break-words">
                 {currentUser?.email || 'Progress tersimpan di cloud database secara otomatis.'}
               </p>
             </div>

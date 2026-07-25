@@ -308,19 +308,19 @@ export const SystemBadgesModal: React.FC<SystemBadgesModalProps> = ({
                         {badge.name}
                       </h4>
                       {badge.unlocked ? (
-                        <span className="text-[9px] font-pixel text-emerald-400 bg-emerald-950 px-1.5 py-0.5 rounded border border-emerald-700 flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3" /> AKTIFF
+                        <span className="text-[9px] font-pixel text-emerald-400 bg-emerald-950 px-1.5 py-0.5 rounded border border-emerald-700 flex items-center gap-1 shrink-0">
+                          <CheckCircle2 className="w-3 h-3" /> AKTIF
                         </span>
                       ) : (
-                        <span className="text-[9px] font-pixel text-amber-400 bg-amber-950 px-1.5 py-0.5 rounded border border-amber-800">
+                        <span className="text-[9px] font-pixel text-amber-400 bg-amber-950 px-1.5 py-0.5 rounded border border-amber-800 shrink-0">
                           REQ LV {badge.reqLevel}
                         </span>
                       )}
                     </div>
-                    <p className="text-[11px] text-amber-200/80 font-sans-clean leading-tight mt-0.5">
+                    <p className="text-[11px] text-amber-200/80 font-sans-clean leading-tight mt-0.5 break-words">
                       {badge.description}
                     </p>
-                    <span className="text-[10px] font-pixel text-amber-400/90 block mt-1">
+                    <span className="text-[10px] font-pixel text-amber-400/90 block mt-1 break-words">
                       {badge.progressText}
                     </span>
                   </div>

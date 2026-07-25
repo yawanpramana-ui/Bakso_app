@@ -12,6 +12,7 @@ import { HomeScreenModal } from './components/HomeScreenModal';
 import { SystemBadgesModal } from './components/SystemBadgesModal';
 import { LevelUpModal } from './components/LevelUpModal';
 import { MultiplayerPartyModal } from './components/MultiplayerPartyModal';
+import { SplashScreen } from './components/SplashScreen';
 import { soundFx } from './utils/audio';
 import {
   auth,
@@ -75,17 +76,18 @@ export default function App() {
       // ignore
     }
     return {
-      name: 'Hunter Pentol #1',
-      title: 'Suhu Kuah Kaldu',
+      name: 'Hunter Pentol Baru',
+      title: 'Pemburu Amatir',
       avatarExpression: 'star',
-      level: 3,
-      xp: 250,
-      nextLevelXp: 400,
+      level: 1,
+      xp: 0,
+      nextLevelXp: 100,
       favoriteType: 'Bakso Urat Jumbo',
     };
   });
 
   // UI States
+  const [showSplash, setShowSplash] = useState<boolean>(true);
   const [selectedSpot, setSelectedSpot] = useState<BaksoSpot | null>(null);
   const [isHomeScreenOpen, setIsHomeScreenOpen] = useState<boolean>(true);
   const [isBadgesOpen, setIsBadgesOpen] = useState<boolean>(false);
@@ -518,6 +520,9 @@ export default function App() {
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#120e17] font-sans-clean select-none">
       
+      {/* Splash Screen on Application Load */}
+      {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
+
       {/* Scanlines Overlay Effect for CRT Retro Feel */}
       {isScanlinesOn && <div className="absolute inset-0 scanlines z-20 pointer-events-none opacity-40" />}
 
@@ -575,10 +580,10 @@ export default function App() {
         <button
           onClick={handleTriggerGpsLocation}
           title="Tambah Bakso Berdasarkan GPS Lokasi Saya Sekarang"
-          className="absolute bottom-6 left-4 sm:left-6 z-20 px-3.5 py-2.5 bg-[#800000] hover:bg-[#a00000] text-[#ffd700] border-2 border-[#ffd700] rounded-xl shadow-[4px_4px_0px_#2d1b15] font-pixel text-xs flex items-center gap-2 active:translate-y-0.5 transition-transform"
+          className="absolute bottom-6 left-3 sm:left-6 z-20 px-2.5 py-2 sm:px-3.5 sm:py-2.5 bg-[#800000] hover:bg-[#a00000] text-[#ffd700] border-2 border-[#ffd700] rounded-xl shadow-[4px_4px_0px_#2d1b15] font-pixel text-[10px] sm:text-xs flex items-center gap-1.5 sm:gap-2 active:translate-y-0.5 transition-transform max-w-[170px] sm:max-w-none"
         >
-          <Navigation className="w-4 h-4 fill-current text-emerald-400" />
-          <span className="hidden sm:inline">📍 LOKASI GPS SAYA</span>
+          <Navigation className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current text-emerald-400 shrink-0" />
+          <span className="truncate">📍 LOKASI GPS SAYA</span>
         </button>
       </main>
 
@@ -657,12 +662,15 @@ export default function App() {
         }}
       />
 
-      {/* Layar Utama / Home Screen Modal */}
+      {/* Layar Utama / Home Screen Modal (Game Title Screen) */}
       <HomeScreenModal
         isOpen={isHomeScreenOpen}
         onClose={() => setIsHomeScreenOpen(false)}
         profile={profile}
         spots={spots}
+        currentUser={currentUser}
+        onLoginGoogle={handleLoginGoogle}
+        onOpenMultiplayer={() => setIsMultiplayerModalOpen(true)}
         onOpenAddSpot={() => {
           setPendingCoords(null);
           setIsAddModalOpen(true);

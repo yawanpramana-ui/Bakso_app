@@ -79,11 +79,11 @@ export const BaksoMap: React.FC<BaksoMapProps> = ({
   // Helper for pending new spot marker icon
   const createPendingIcon = () => {
     const htmlContent = `
-      <div class="relative cursor-pointer animate-bounce">
-        <div class="w-12 h-12 rounded-2xl bg-amber-500 border-4 border-amber-950 flex items-center justify-center text-2xl shadow-2xl">
+      <div class="relative cursor-pointer animate-bounce flex flex-col items-center justify-center w-full">
+        <div class="w-11 h-11 rounded-2xl bg-amber-500 border-3 border-amber-950 flex items-center justify-center text-xl shadow-2xl shrink-0">
           📍
         </div>
-        <div class="bg-amber-950 text-amber-300 text-[9px] font-bold px-1.5 py-0.5 rounded border border-amber-400 mt-1 whitespace-nowrap text-center">
+        <div class="bg-amber-950 text-amber-300 text-[9px] font-bold px-2 py-0.5 rounded-lg border border-amber-400 mt-1 text-center shadow-md whitespace-nowrap max-w-[120px]">
           LOKASI BARU
         </div>
       </div>
@@ -91,8 +91,8 @@ export const BaksoMap: React.FC<BaksoMapProps> = ({
     return L.divIcon({
       html: htmlContent,
       className: 'pending-spot-marker',
-      iconSize: [48, 56],
-      iconAnchor: [24, 56],
+      iconSize: [120, 70],
+      iconAnchor: [60, 50],
     });
   };
 
@@ -361,9 +361,9 @@ export const BaksoMap: React.FC<BaksoMapProps> = ({
 
       {/* Map Interactive HUD Banner overlay when adding location */}
       {isAddingMode && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-[#800000] text-[#ffd700] border-3 border-[#ffd700] px-4 py-2 rounded-xl shadow-[4px_4px_0px_#2d1b15] flex items-center gap-3 animate-pulse">
-          <span className="text-xl">📍</span>
-          <p className="text-xs font-pixel leading-relaxed">
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-[#800000] text-[#ffd700] border-3 border-[#ffd700] px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl shadow-[4px_4px_0px_#2d1b15] flex items-center gap-2 sm:gap-3 animate-pulse max-w-[90vw] text-center">
+          <span className="text-lg sm:text-xl shrink-0">📍</span>
+          <p className="text-[10px] sm:text-xs font-pixel leading-tight break-words">
             KLIK PADA PETA UNTUK MENENTUKAN LOKASI KEDAI BAKSO!
           </p>
         </div>

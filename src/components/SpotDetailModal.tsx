@@ -50,13 +50,13 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
       <div className="relative w-full max-w-2xl bg-[#1e1726] border-4 border-amber-500 rounded-2xl shadow-2xl p-4 sm:p-6 text-amber-100 my-auto max-h-[92vh] overflow-y-auto pixel-border-gold">
         
         {/* RPG Character Status Frame Header */}
-        <div className="flex items-center justify-between border-b-2 border-amber-800 pb-3 mb-4">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between border-b-2 border-amber-800 pb-3 mb-4 gap-2">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             <CharacterAvatar expression={spot.characterExpression} size="lg" />
-            <div>
-              <div className="flex items-center gap-2 mb-0.5">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2 mb-0.5">
                 <span
-                  className="text-[10px] font-pixel font-bold uppercase px-2 py-0.5 rounded border shadow-sm"
+                  className="text-[10px] font-pixel font-bold uppercase px-2 py-0.5 rounded border shadow-sm shrink-0"
                   style={{
                     backgroundColor: exprData.bgHex,
                     borderColor: exprData.borderColor,
@@ -65,11 +65,11 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
                 >
                   {exprData.emoji} {exprData.name}
                 </span>
-                <span className="text-xs font-arcade text-amber-300">
+                <span className="text-xs font-arcade text-amber-300 shrink-0">
                   Price: <strong className="text-amber-200">{spot.priceRange}</strong>
                 </span>
               </div>
-              <h2 className="text-lg sm:text-2xl font-pixel text-amber-300 tracking-tight leading-tight">
+              <h2 className="text-lg sm:text-2xl font-pixel text-amber-300 tracking-tight leading-tight break-words">
                 {spot.name}
               </h2>
             </div>
@@ -80,7 +80,7 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
               soundFx.playClick();
               onClose();
             }}
-            className="p-2 rounded-xl bg-amber-950 hover:bg-red-950 border border-amber-700 text-amber-300 transition-colors"
+            className="p-2 rounded-xl bg-amber-950 hover:bg-red-950 border border-amber-700 text-amber-300 transition-colors shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
@@ -88,13 +88,13 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
 
         <div className="space-y-4">
           {/* Location & Date Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-2 bg-[#281f33] p-3 rounded-xl border border-amber-900/80 text-xs">
-            <div className="flex items-center gap-1.5 text-amber-200">
-              <MapPin className="w-4 h-4 text-amber-400 shrink-0" />
-              <span>{spot.address}</span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-[#281f33] p-3 rounded-xl border border-amber-900/80 text-xs">
+            <div className="flex items-start gap-1.5 text-amber-200 min-w-0 flex-1 break-words">
+              <MapPin className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <span className="break-words">{spot.address}</span>
             </div>
-            <div className="flex items-center gap-3 text-amber-300 font-arcade text-sm">
-              <span className="flex items-center gap-1">
+            <div className="flex items-center gap-3 text-amber-300 font-arcade text-sm shrink-0 pt-1 sm:pt-0 border-t sm:border-t-0 border-amber-900/60">
+              <span className="flex items-center gap-1 shrink-0">
                 <Calendar className="w-3.5 h-3.5 text-amber-400" /> {spot.visitDate}
               </span>
               {onFlyToMap && (
@@ -104,7 +104,7 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
                     onFlyToMap(spot.lat, spot.lng);
                     onClose();
                   }}
-                  className="px-2.5 py-1 bg-amber-700 hover:bg-amber-600 text-amber-950 font-bold font-pixel text-[10px] rounded border border-amber-300 transition-all"
+                  className="px-2.5 py-1 bg-amber-700 hover:bg-amber-600 text-amber-950 font-bold font-pixel text-[10px] rounded border border-amber-300 transition-all shrink-0 whitespace-nowrap"
                 >
                   🗺️ Tampilkan di Peta
                 </button>
@@ -191,7 +191,7 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
               <Award className="w-4 h-4 text-amber-400" />
               CATATAN PETUALANG (REVIEW)
             </h4>
-            <p className="text-sm text-amber-100/95 leading-relaxed font-sans-clean bg-[#181320] p-3.5 rounded-xl border border-amber-900 italic">
+            <p className="text-sm text-amber-100/95 leading-relaxed font-sans-clean bg-[#181320] p-3.5 rounded-xl border border-amber-900 italic break-words whitespace-pre-line overflow-hidden">
               "{spot.review}"
             </p>
           </div>

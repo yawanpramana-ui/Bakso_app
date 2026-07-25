@@ -198,9 +198,9 @@ export const AddSpotModal: React.FC<AddSpotModalProps> = ({
         </div>
 
         {errorMsg && (
-          <div className="mb-4 p-3 bg-red-950/80 border-2 border-red-500 rounded-xl flex items-center gap-2 text-xs text-red-200 font-bold">
+          <div className="mb-4 p-3 bg-red-950/80 border-2 border-red-500 rounded-xl flex items-center gap-2 text-xs text-red-200 font-bold break-words min-w-0">
             <AlertCircle className="w-4 h-4 shrink-0" />
-            {errorMsg}
+            <span className="break-words">{errorMsg}</span>
           </div>
         )}
 
