@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { BaksoSpot, HunterProfile, Party } from './types';
-import { INITIAL_BAKSO_SPOTS } from './data/initialSpots';
 import { BaksoMap } from './components/BaksoMap';
 import { BaksoHudNavbar } from './components/BaksoHudNavbar';
 import { AddSpotModal } from './components/AddSpotModal';
@@ -64,7 +63,7 @@ export default function App() {
     } catch {
       // ignore
     }
-    return INITIAL_BAKSO_SPOTS;
+    return [];
   });
 
   // Load Hunter Profile from LocalStorage or Default
@@ -143,20 +142,39 @@ export default function App() {
         try {
           const userRef = doc(db, 'users', user.uid);
           const userSnap = await getDoc(userRef);
-          if (!userSnap.exists()) {
+          if (userSnap.exists()) {
+            const uData = userSnap.data();
+            setProfile((prev) => ({
+              ...prev,
+              name: uData.name || user.displayName || prev.name,
+              level: uData.level || prev.level,
+              xp: uData.xp || prev.xp,
+              title: getTitleForLevel(uData.level || prev.level),
+              favoriteType: uData.favoriteType || prev.favoriteType,
+              avatarExpression: uData.avatarExpression || prev.avatarExpression,
+            }));
+          } else {
             await setDoc(userRef, {
               uid: user.uid,
-              name: profile.name,
+              name: user.displayName || profile.name,
               level: profile.level,
               xp: profile.xp,
               createdAt: new Date().toISOString(),
             });
           }
 
-          // Realtime user doc listener (tracks party changes)
+          // Realtime user doc listener (tracks party changes & profile changes)
           userUnsub = onSnapshot(userRef, (docSnap) => {
             if (docSnap.exists()) {
               const uData = docSnap.data();
+              setProfile((prev) => ({
+                ...prev,
+                name: uData.name || prev.name,
+                level: uData.level || prev.level,
+                xp: uData.xp || prev.xp,
+                title: getTitleForLevel(uData.level || prev.level),
+              }));
+
               if (uData.currentPartyId) {
                 if (partyUnsub) partyUnsub();
                 partyUnsub = onSnapshot(doc(db, 'parties', uData.currentPartyId), (pSnap) => {
@@ -220,14 +238,8 @@ export default function App() {
             firestoreSpots.push({ id: docSnap.id, ...docSnap.data() } as BaksoSpot);
           });
 
-          if (firestoreSpots.length > 0) {
-            setSpots((prev) => {
-              const spotMap = new Map<string, BaksoSpot>();
-              prev.forEach((s) => spotMap.set(s.id, s));
-              firestoreSpots.forEach((s) => spotMap.set(s.id, s));
-              return Array.from(spotMap.values());
-            });
-          }
+          // Sync spots state directly with Firestore dataset
+          setSpots(firestoreSpots);
         },
         (err) => {
           console.warn('Firestore subscription error:', err);
@@ -243,59 +255,93 @@ export default function App() {
   // Multiplayer Party Functions
   const handleLoginGoogle = async () => {
     try {
-      await signInWithPopup(auth, googleProvider);
+      const res = await signInWithPopup(auth, googleProvider);
       soundFx.playSuccess();
+
+      // Migrate existing local spots to the newly logged-in Google account
+      if (res?.user && spots.length > 0) {
+        for (const s of spots) {
+          try {
+            await setDoc(
+              doc(db, 'spots', s.id),
+              {
+                ...s,
+                ownerId: res.user.uid,
+                addedByName: res.user.displayName || profile.name,
+              },
+              { merge: true }
+            );
+          } catch (e) {
+            console.warn('Migration error for spot:', s.id, e);
+          }
+        }
+      }
     } catch (err: any) {
       console.warn('Google sign-in error:', err);
     }
   };
 
   const handleCreateParty = async (partyName: string) => {
-    if (!currentUser) throw new Error('Pengguna belum terautentikasi.');
-    const inviteCode = 'BKSO' + Math.random().toString(36).substring(2, 4).toUpperCase();
-    const partyData = {
-      name: partyName,
-      ownerId: currentUser.uid,
-      memberIds: [currentUser.uid],
-      memberNames: { [currentUser.uid]: profile.name },
-      inviteCode,
-      createdAt: Date.now(),
-    };
+    if (!currentUser) {
+      throw new Error('Anda belum login. Silakan klik Login terlebih dahulu.');
+    }
+    try {
+      const inviteCode = 'BKSO' + Math.random().toString(36).substring(2, 6).toUpperCase();
+      const userName = profile.name || currentUser.displayName || 'Hunter Pentol';
+      const partyData = {
+        name: partyName.trim(),
+        ownerId: currentUser.uid,
+        memberIds: [currentUser.uid],
+        memberNames: { [currentUser.uid]: userName },
+        inviteCode,
+        createdAt: Date.now(),
+      };
 
-    const partyRef = await addDoc(collection(db, 'parties'), partyData);
-    await setDoc(doc(db, 'users', currentUser.uid), { currentPartyId: partyRef.id }, { merge: true });
+      const partyRef = await addDoc(collection(db, 'parties'), partyData);
+      await setDoc(doc(db, 'users', currentUser.uid), { currentPartyId: partyRef.id }, { merge: true });
 
-    setCurrentParty({
-      id: partyRef.id,
-      ...partyData,
-    });
+      setCurrentParty({
+        id: partyRef.id,
+        ...partyData,
+      });
+    } catch (err: any) {
+      console.error('Error creating party:', err);
+      throw new Error(err?.message || 'Gagal membuat Squad Party di database server.');
+    }
   };
 
   const handleJoinPartyByCode = async (inviteCode: string): Promise<boolean> => {
     if (!currentUser) return false;
-    const partyQuery = query(collection(db, 'parties'), where('inviteCode', '==', inviteCode.toUpperCase().trim()));
-    const partyDocs = await getDocs(partyQuery);
+    try {
+      const cleanCode = inviteCode.toUpperCase().trim();
+      const partyQuery = query(collection(db, 'parties'), where('inviteCode', '==', cleanCode));
+      const partyDocs = await getDocs(partyQuery);
 
-    if (partyDocs.empty) return false;
+      if (partyDocs.empty) return false;
 
-    const partyDoc = partyDocs.docs[0];
-    const partyData = partyDoc.data() as Party;
+      const partyDoc = partyDocs.docs[0];
+      const partyData = partyDoc.data() as Party;
+      const userName = profile.name || currentUser.displayName || 'Hunter Pentol';
 
-    await updateDoc(doc(db, 'parties', partyDoc.id), {
-      memberIds: arrayUnion(currentUser.uid),
-      [`memberNames.${currentUser.uid}`]: profile.name,
-    });
+      await updateDoc(doc(db, 'parties', partyDoc.id), {
+        memberIds: arrayUnion(currentUser.uid),
+        [`memberNames.${currentUser.uid}`]: userName,
+      });
 
-    await setDoc(doc(db, 'users', currentUser.uid), { currentPartyId: partyDoc.id }, { merge: true });
+      await setDoc(doc(db, 'users', currentUser.uid), { currentPartyId: partyDoc.id }, { merge: true });
 
-    setCurrentParty({
-      ...partyData,
-      id: partyDoc.id,
-      memberIds: Array.from(new Set([...partyData.memberIds, currentUser.uid])),
-      memberNames: { ...partyData.memberNames, [currentUser.uid]: profile.name },
-    });
+      setCurrentParty({
+        ...partyData,
+        id: partyDoc.id,
+        memberIds: Array.from(new Set([...partyData.memberIds, currentUser.uid])),
+        memberNames: { ...partyData.memberNames, [currentUser.uid]: userName },
+      });
 
-    return true;
+      return true;
+    } catch (err) {
+      console.error('Error joining party:', err);
+      return false;
+    }
   };
 
   const handleLeaveParty = async () => {
@@ -305,8 +351,8 @@ export default function App() {
         memberIds: arrayRemove(currentUser.uid),
       });
       await setDoc(doc(db, 'users', currentUser.uid), { currentPartyId: null }, { merge: true });
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn('Error leaving party:', err);
     }
     setCurrentParty(null);
   };
@@ -374,21 +420,36 @@ export default function App() {
         });
       }
 
-      return {
+      const updated = {
         ...prev,
         xp: newXp,
         level: newLevel,
         nextLevelXp: nextXp,
         title: updatedTitle,
       };
+
+      if (currentUser) {
+        setDoc(
+          doc(db, 'users', currentUser.uid),
+          {
+            level: updated.level,
+            xp: updated.xp,
+            title: updated.title,
+          },
+          { merge: true }
+        ).catch(() => {});
+      }
+
+      return updated;
     });
   };
 
   // Save new spot
   const handleSaveSpot = async (newSpotData: Omit<BaksoSpot, 'id' | 'createdAt'>) => {
+    const spotId = `spot-${Date.now()}`;
     const newSpot: BaksoSpot = {
       ...newSpotData,
-      id: `spot-${Date.now()}`,
+      id: spotId,
       createdAt: Date.now(),
       ownerId: currentUser?.uid || 'local',
       partyId: currentParty?.id,
@@ -405,18 +466,17 @@ export default function App() {
     setPendingCoords(null);
     setIsAddingMode(false);
 
-    // Save to Firestore Database
+    // Save to Firestore Database using matching doc ID
     if (currentUser) {
       try {
-        await addDoc(collection(db, 'spots'), {
-          ...newSpotData,
+        await setDoc(doc(db, 'spots', spotId), {
+          ...newSpot,
           ownerId: currentUser.uid,
           partyId: currentParty?.id || null,
           addedByName: profile.name,
-          createdAt: Date.now(),
         });
-      } catch {
-        // ignore
+      } catch (err) {
+        console.warn('Error saving spot to Firestore:', err);
       }
     }
 
@@ -425,7 +485,7 @@ export default function App() {
   };
 
   // Delete spot
-  const handleDeleteSpot = (id: string) => {
+  const handleDeleteSpot = async (id: string) => {
     setSpots((prev) => {
       const nextSpots = prev.filter((s) => s.id !== id);
       try {
@@ -437,6 +497,13 @@ export default function App() {
     });
     if (selectedSpot?.id === id) {
       setSelectedSpot(null);
+    }
+    if (currentUser) {
+      try {
+        await deleteDoc(doc(db, 'spots', id));
+      } catch (err) {
+        console.warn('Error deleting spot from Firestore:', err);
+      }
     }
   };
 
@@ -510,7 +577,7 @@ export default function App() {
 
   // Handle Data Reset
   const handleResetData = () => {
-    setSpots(INITIAL_BAKSO_SPOTS);
+    setSpots([]);
     localStorage.removeItem(STORAGE_KEY_SPOTS);
     localStorage.removeItem(STORAGE_KEY_PROFILE);
     setMapCenter([-6.2088, 106.8456]);
@@ -635,7 +702,15 @@ export default function App() {
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}
         profile={profile}
-        onUpdateProfile={(updated) => setProfile((p) => ({ ...p, ...updated }))}
+        onUpdateProfile={(updated) => {
+          setProfile((p) => {
+            const next = { ...p, ...updated };
+            if (currentUser) {
+              setDoc(doc(db, 'users', currentUser.uid), next, { merge: true }).catch(() => {});
+            }
+            return next;
+          });
+        }}
         spots={spots}
       />
 
