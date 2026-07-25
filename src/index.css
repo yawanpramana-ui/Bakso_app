@@ -1,0 +1,145 @@
+@import "tailwindcss";
+
+:root {
+  --rpg-bg: #fdf6e3;
+  --rpg-header: #800000;
+  --rpg-accent: #ffd700;
+  --rpg-border: #5d4037;
+  --rpg-text: #2d1b15;
+}
+
+@layer utilities {
+  .font-pixel {
+    font-family: 'Press Start 2P', monospace, cursive;
+  }
+  .font-arcade {
+    font-family: 'VT323', monospace;
+  }
+  .font-sans-clean {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+
+  /* RPG Card & Frame Styles */
+  .rpg-card {
+    background-color: #fdf6e3;
+    border: 3px solid #5d4037;
+    box-shadow: 4px 4px 0px #5d4037;
+  }
+
+  .rpg-card-dark {
+    background-color: #3d281d;
+    color: #fdf6e3;
+    border: 3px solid #ffd700;
+    box-shadow: 4px 4px 0px #5d4037;
+  }
+
+  .pixel-border-gold {
+    border: 4px solid #ffd700;
+    box-shadow: 0 0 0 4px #5d4037, 6px 6px 0px #2d1b15;
+  }
+
+  /* 3D Retro Button Styles */
+  .btn-3d {
+    background: #ffd700;
+    color: #2d1b15;
+    border-bottom: 4px solid #b39700;
+    border-right: 4px solid #b39700;
+    border-top: 2px solid #fff5a0;
+    border-left: 2px solid #fff5a0;
+    font-weight: bold;
+    transition: all 0.08s ease;
+  }
+
+  .btn-3d:active {
+    border-bottom-width: 1px;
+    border-right-width: 1px;
+    transform: translate(2px, 2px);
+  }
+
+  .btn-3d-maroon {
+    background: #800000;
+    color: #ffd700;
+    border-bottom: 4px solid #4a0000;
+    border-right: 4px solid #4a0000;
+    border-top: 2px solid #b33333;
+    border-left: 2px solid #b33333;
+    font-weight: bold;
+    transition: all 0.08s ease;
+  }
+
+  .btn-3d-maroon:active {
+    border-bottom-width: 1px;
+    border-right-width: 1px;
+    transform: translate(2px, 2px);
+  }
+
+  /* Custom Scanlines effect overlay */
+  .scanlines {
+    background: linear-gradient(
+      rgba(253, 246, 227, 0) 50%, 
+      rgba(45, 27, 21, 0.15) 50%
+    );
+    background-size: 100% 4px;
+    pointer-events: none;
+  }
+}
+
+/* Custom Leaflet Map styling for RPG Vibrant Look */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  background-color: #c8e1a7 !important;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+/* Retro styled Leaflet Popup in RPG Theme */
+.leaflet-popup-content-wrapper {
+  background: #5d4037 !important;
+  color: #fdf6e3 !important;
+  border: 4px solid #ffd700 !important;
+  border-radius: 8px !important;
+  box-shadow: 4px 4px 0px #2d1b15, 0 10px 25px rgba(0,0,0,0.5) !important;
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+.leaflet-popup-content {
+  margin: 0 !important;
+  line-height: 1.4 !important;
+}
+
+.leaflet-popup-tip {
+  background: #ffd700 !important;
+}
+
+.leaflet-popup-close-button {
+  color: #ffd700 !important;
+  font-size: 20px !important;
+  padding: 8px !important;
+}
+
+.leaflet-popup-close-button:hover {
+  color: #ffffff !important;
+}
+
+/* Custom Scrollbar for RPG Dialog feel */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #2d1b15;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #800000;
+  border: 1px solid #ffd700;
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a00000;
+}
+
+

@@ -1,0 +1,6 @@
+{
+  "name": "Bakso Quest",
+  "description": "Aplikasi pelacak dan peninjau tempat makan Bakso bertema RPG retro dengan peta interaktif dan avatar karakter.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
