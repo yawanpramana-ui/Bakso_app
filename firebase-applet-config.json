@@ -1,12 +1,12 @@
 {
-  "projectId": "gen-lang-client-0230580004",
-  "appId": "1:579671374927:web:548098cdec4cd5023e3e3a",
-  "apiKey": "AIzaSyCf7P0hcOHoogDIFqxAl6ry8ovbk7-d5GU",
-  "authDomain": "gen-lang-client-0230580004.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-baksoquest-aeeada21-52a3-43ee-b0d6-07d62018008c",
-  "storageBucket": "gen-lang-client-0230580004.firebasestorage.app",
-  "messagingSenderId": "579671374927",
-  "measurementId": "",
-  "oAuthClientId": "579671374927-6o19t93c9pasto9kttem32ivl8jcuk56.apps.googleusercontent.com",
+  "projectId": "bakso-app-5f737",
+  "appId": "1:154558574478:web:97e8e86c0e755f2e3b7edf",
+  "apiKey": "AIzaSyDgxy2cUOb-IoqhxL5xxXlQ9o4HZtfM2Pk",
+  "authDomain": "bakso-app-5f737.firebaseapp.com",
+  "firestoreDatabaseId": "(default)",
+  "storageBucket": "bakso-app-5f737.firebasestorage.app",
+  "messagingSenderId": "154558574478",
+  "measurementId": "G-JRTW415J36",
+  "oAuthClientId": "",
   "recaptchaSiteKey": ""
 }
