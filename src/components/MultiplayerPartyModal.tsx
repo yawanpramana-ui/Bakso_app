@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Party, HunterProfile, BaksoSpot } from '../types';
+import React, { useState, useEffect, useRef } from 'react';
+import { Party, HunterProfile, BaksoSpot, ChatMessage } from '../types';
+import { EXPRESSIONS } from '../data/expressions';
 import { soundFx } from '../utils/audio';
-import { db, doc, onSnapshot } from '../lib/firebase';
+import { db, doc, onSnapshot, collection, setDoc, updateDoc, arrayUnion, query, limit } from '../lib/firebase';
 import {
   Users,
   UserCheck,
@@ -23,7 +24,9 @@ import {
   Zap,
   Award,
   MapPin,
-  TrendingUp
+  TrendingUp,
+  MessageSquare,
+  Send,
 } from 'lucide-react';
 
 interface MultiplayerPartyModalProps {
@@ -73,7 +76,7 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
   onLeaveParty,
   onOpenAddModal,
 }) => {
-  const [activeTab, setActiveTab] = useState<'members' | 'ranking'>('ranking');
+  const [activeTab, setActiveTab] = useState<'ranking' | 'members' | 'chat'>('ranking');
   const [newPartyName, setNewPartyName] = useState('');
   const [joinCodeInput, setJoinCodeInput] = useState('');
   const [copiedCode, setCopiedCode] = useState(false);
@@ -83,6 +86,11 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
 
   // Realtime profiles for all squad members
   const [memberProfiles, setMemberProfiles] = useState<Record<string, MemberProfileData>>({});
+
+  // Realtime Squad Chat state
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!currentParty || !isOpen) return;
@@ -123,10 +131,103 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
 
     setMemberProfiles((prev) => ({ ...profilesMap, ...prev }));
 
+    // Merge currentParty.messages if available
+    if (currentParty.messages && Array.isArray(currentParty.messages)) {
+      setMessages((prev) => {
+        const map = new Map<string, ChatMessage>();
+        prev.forEach((m) => map.set(m.id || `${m.senderName}-${m.createdAt}`, m));
+        currentParty.messages!.forEach((m) => map.set(m.id || `${m.senderName}-${m.createdAt}`, m));
+        return Array.from(map.values()).sort((a, b) => a.createdAt - b.createdAt);
+      });
+    }
+
+    // Listen to realtime chat subcollection
+    try {
+      const msgRef = collection(db, 'parties', currentParty.id, 'messages');
+      const chatUnsub = onSnapshot(
+        msgRef,
+        (snapshot) => {
+          const msgs: ChatMessage[] = [];
+          snapshot.forEach((docSnap) => {
+            msgs.push({ id: docSnap.id, ...docSnap.data() } as ChatMessage);
+          });
+          // Sort by timestamp ascending locally (index-free realtime sync)
+          msgs.sort((a, b) => a.createdAt - b.createdAt);
+          setMessages((prev) => {
+            const map = new Map<string, ChatMessage>();
+            prev.forEach((m) => map.set(m.id || `${m.senderName}-${m.createdAt}`, m));
+            msgs.forEach((m) => map.set(m.id || `${m.senderName}-${m.createdAt}`, m));
+            return Array.from(map.values()).sort((a, b) => a.createdAt - b.createdAt);
+          });
+          setTimeout(() => {
+            chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+          }, 100);
+        },
+        (err) => {
+          console.warn('Realtime chat listener error:', err);
+        }
+      );
+      unsubs.push(chatUnsub);
+    } catch (err) {
+      console.warn('Error initiating chat listener:', err);
+    }
+
     return () => {
       unsubs.forEach((fn) => fn());
     };
-  }, [currentParty?.id, currentParty?.memberIds, isOpen, currentUser?.uid, profile.level, profile.xp, profile.name]);
+  }, [currentParty?.id, currentParty?.memberIds, currentParty?.messages, isOpen, currentUser?.uid, profile.level, profile.xp, profile.name]);
+
+  const handleSendMessage = async (textToSend?: string) => {
+    const msgText = (textToSend || chatInput).trim();
+    if (!msgText || !currentParty) return;
+
+    soundFx.playClick();
+    setChatInput('');
+
+    const senderUid = currentUser?.uid || 'guest-' + Date.now();
+    const senderName = profile.name || 'Hunter';
+    const createdAt = Date.now();
+    const msgId = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+
+    const newMsgObj: ChatMessage = {
+      id: msgId,
+      partyId: currentParty.id,
+      senderUid,
+      senderName,
+      senderAvatar: profile.avatarExpression || 'happy',
+      text: msgText,
+      createdAt,
+    };
+
+    // Optimistic UI update so message shows up IMMEDIATELY locally
+    setMessages((prev) => {
+      const exists = prev.some(
+        (m) => m.id === msgId || (m.text === msgText && m.senderName === senderName && Math.abs(m.createdAt - createdAt) < 2000)
+      );
+      if (exists) return prev;
+      return [...prev, newMsgObj];
+    });
+
+    setTimeout(() => {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 50);
+
+    try {
+      // 1. Update party doc directly so App.tsx snapshot listener receives instant update for ALL members
+      await updateDoc(doc(db, 'parties', currentParty.id), {
+        messages: arrayUnion(newMsgObj),
+      });
+    } catch (e) {
+      // ignore
+    }
+
+    try {
+      // 2. Also save to subcollection as backup
+      await setDoc(doc(db, 'parties', currentParty.id, 'messages', msgId), newMsgObj);
+    } catch (err) {
+      console.warn('Error sending chat message to Firestore subcollection:', err);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -336,21 +437,21 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
               </button>
             </div>
 
-            {/* TAB SWITCHER: ANGGOTA VS PARTY RANKING */}
-            <div className="flex items-center gap-2 p-1 bg-[#181320] rounded-xl border border-amber-900">
+            {/* TAB SWITCHER: PERINGKAT vs ANGGOTA vs CHAT */}
+            <div className="flex items-center gap-1.5 p-1 bg-[#181320] rounded-xl border border-amber-900">
               <button
                 onClick={() => {
                   soundFx.playClick();
                   setActiveTab('ranking');
                 }}
-                className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                className={`flex-1 py-2 px-2 rounded-lg text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
                   activeTab === 'ranking'
                     ? 'bg-[#800000] text-[#ffd700] border border-[#ffd700] shadow-md'
                     : 'text-amber-300 hover:text-amber-100 hover:bg-amber-950/50'
                 }`}
               >
-                <Trophy className="w-4 h-4 text-[#ffd700]" />
-                <span>🏆 PERINGKAT SQUAD</span>
+                <Trophy className="w-3.5 h-3.5 text-[#ffd700] shrink-0" />
+                <span>🏆 PERINGKAT</span>
               </button>
 
               <button
@@ -358,14 +459,29 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
                   soundFx.playClick();
                   setActiveTab('members');
                 }}
-                className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                className={`flex-1 py-2 px-2 rounded-lg text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
                   activeTab === 'members'
                     ? 'bg-[#800000] text-[#ffd700] border border-[#ffd700] shadow-md'
                     : 'text-amber-300 hover:text-amber-100 hover:bg-amber-950/50'
                 }`}
               >
-                <Users className="w-4 h-4 text-emerald-400" />
-                <span>👥 ANGGOTA & INVITE ({currentParty.memberIds.length})</span>
+                <Users className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>👥 ANGGOTA ({currentParty.memberIds.length})</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  soundFx.playClick();
+                  setActiveTab('chat');
+                }}
+                className={`flex-1 py-2 px-2 rounded-lg text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1.5 transition-all relative ${
+                  activeTab === 'chat'
+                    ? 'bg-[#800000] text-[#ffd700] border border-[#ffd700] shadow-md'
+                    : 'text-amber-300 hover:text-amber-100 hover:bg-amber-950/50'
+                }`}
+              >
+                <MessageSquare className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                <span>💬 CHAT SQUAD</span>
               </button>
             </div>
 
@@ -624,6 +740,111 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
                 </div>
               </div>
             )}
+
+            {/* TAB 3: OBROLAN SQUAD (LIVE CHAT VIEW) */}
+            {activeTab === 'chat' && (
+              <div className="space-y-3 animate-fade-in">
+                {/* Preset RPG Quick Messages */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[10px]">
+                  <span className="text-amber-400 font-pixel text-[9px] shrink-0">Pesan Cepat:</span>
+                  {[
+                    '🍲 Yuk gass mampir makan bakso!',
+                    '📍 Ada spot bakso enak baru nih!',
+                    '🔥 Sambalnya pedas gila!',
+                    '🏆 Siapa top hunter minggu ini?',
+                    '⚔️ Siap meluncur ke lokasi!',
+                  ].map((preset) => (
+                    <button
+                      key={preset}
+                      onClick={() => handleSendMessage(preset)}
+                      className="px-2 py-1 bg-amber-950 hover:bg-amber-900 text-amber-200 border border-amber-700 rounded-lg shrink-0 font-arcade transition-all active:scale-95"
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Message Log Box */}
+                <div className="bg-[#181320] border-2 border-amber-800 rounded-2xl p-3 h-64 overflow-y-auto space-y-2.5 shadow-inner">
+                  {messages.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center text-amber-300/50 space-y-1">
+                      <span className="text-2xl">💬</span>
+                      <p className="text-xs font-pixel">Belum ada pesan di Obrolan Squad.</p>
+                      <p className="text-[10px] font-sans-clean text-amber-400/60">
+                        Kirim pesan pertama atau gunakan tombol Pesan Cepat di atas!
+                      </p>
+                    </div>
+                  ) : (
+                    messages.map((msg) => {
+                      const isMe =
+                        (currentUser?.uid && msg.senderUid === currentUser.uid) ||
+                        (msg.senderName && msg.senderName === profile.name);
+                      const timeStr = new Date(msg.createdAt).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      });
+                      const exprData = EXPRESSIONS[msg.senderAvatar] || EXPRESSIONS.happy;
+
+                      return (
+                        <div
+                          key={msg.id}
+                          className={`flex items-start gap-2 ${isMe ? 'flex-row-reverse' : ''}`}
+                        >
+                          <div
+                            className="w-7 h-7 rounded-full flex items-center justify-center text-sm border shadow shrink-0"
+                            style={{ backgroundColor: exprData.bgHex, borderColor: exprData.borderColor }}
+                          >
+                            {exprData.emoji}
+                          </div>
+
+                          <div
+                            className={`max-w-[78%] rounded-2xl px-3 py-2 text-xs border shadow ${
+                              isMe
+                                ? 'bg-[#800000] text-[#ffd700] border-[#ffd700] rounded-tr-none'
+                                : 'bg-[#281f33] text-amber-100 border-amber-700 rounded-tl-none'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2 mb-0.5 text-[9px]">
+                              <span className={isMe ? 'font-bold text-[#ffd700]' : 'font-bold text-amber-300'}>
+                                {msg.senderName}
+                              </span>
+                              <span className="opacity-60 text-[8px] font-arcade">{timeStr}</span>
+                            </div>
+                            <p className="break-words font-sans-clean text-xs leading-snug">{msg.text}</p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
+
+                {/* Chat Input Form */}
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <input
+                    type="text"
+                    placeholder="Tulis pesan ke squad..."
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    className="flex-1 bg-[#181320] border-2 border-amber-800 focus:border-amber-400 rounded-xl px-3 py-2 text-xs text-amber-100 placeholder-amber-400/40 outline-none transition-colors font-sans-clean"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!chatInput.trim()}
+                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-amber-950 font-bold text-xs rounded-xl border border-amber-200 shadow flex items-center gap-1 active:translate-y-0.5 transition-all font-pixel"
+                  >
+                    <span>Kirim</span>
+                    <Send className="w-3.5 h-3.5" />
+                  </button>
+                </form>
+              </div>
+            )}
           </div>
         ) : (
           /* CREATE OR JOIN SQUAD FORM */
@@ -682,8 +903,8 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
                   <input
                     type="text"
                     required
-                    maxLength={6}
-                    placeholder="misal: BKSO7X"
+                    maxLength={12}
+                    placeholder="misal: BK9X82"
                     value={joinCodeInput}
                     onChange={(e) => setJoinCodeInput(e.target.value.toUpperCase())}
                     className="w-full p-2.5 bg-[#181320] border border-amber-700 rounded-xl text-xs text-center font-mono font-bold tracking-widest text-[#ffd700] placeholder-amber-600/70 focus:border-[#ffd700] outline-none"

@@ -8,15 +8,27 @@ service cloud.firestore {
       allow read, write: if request.auth != null;
     }
 
-    // Party rooms
+    // Party rooms & subcollections (e.g. messages)
     match /parties/{partyId} {
-      allow read, create, update: if request.auth != null;
-      allow delete: if request.auth != null && resource.data.ownerId == request.auth.uid;
+      allow read, create, update, write: if true;
+
+      match /messages/{messageId} {
+        allow read, create, update, write: if true;
+      }
     }
 
     // Spots collection
     match /spots/{spotId} {
       allow read, write: if request.auth != null;
+    }
+
+    // Global Public Chat collection & room document
+    match /global_messages/{messageId} {
+      allow read, create, update, write: if true;
+    }
+
+    match /global_chat/{roomId} {
+      allow read, create, update, write: if true;
     }
   }
 }

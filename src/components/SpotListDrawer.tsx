@@ -201,7 +201,9 @@ export const SpotListDrawer: React.FC<SpotListDrawerProps> = ({
 
                 {/* Bottom Action Footer inside card */}
                 <div className="mt-2.5 pt-2 border-t border-amber-900/60 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 text-[10px] text-amber-300/80 shrink-0">
+                  <div className="flex items-center gap-1.5 text-[10px] text-amber-300/80 shrink-0 flex-wrap">
+                    <span className="text-amber-200 font-pixel font-bold">👤 {spot.addedByName || 'Hunter'}</span>
+                    <span>•</span>
                     <span>Harga: {spot.priceRange}</span>
                     <span>•</span>
                     <span>Pedas: {spot.sambalLevel}🌶️</span>

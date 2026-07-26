@@ -4,15 +4,17 @@ import { EXPRESSION_LIST } from '../data/expressions';
 import { CharacterAvatar } from './CharacterAvatar';
 import { BaksoRating } from './BaksoRating';
 import { soundFx } from '../utils/audio';
+import { findNearbySpot } from '../utils/distance';
 import { X, MapPin, Upload, Image as ImageIcon, Sparkles, AlertCircle, Navigation, Loader2 } from 'lucide-react';
 
 interface AddSpotModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSaveSpot: (spot: Omit<BaksoSpot, 'id' | 'createdAt'> & { id?: string; createdAt?: number }) => void;
+  onSaveSpot: (spot: Omit<BaksoSpot, 'id' | 'createdAt'> & { id?: string; createdAt?: number; isGpsLocated?: boolean }) => void;
   initialCoords?: { lat: number; lng: number } | null;
   onPickFromMap: () => void;
   editingSpot?: BaksoSpot | null;
+  existingSpots?: BaksoSpot[];
 }
 
 // Preset photos if user wants quick sample photo or hasn't uploaded one
@@ -30,6 +32,7 @@ export const AddSpotModal: React.FC<AddSpotModalProps> = ({
   initialCoords,
   onPickFromMap,
   editingSpot,
+  existingSpots = [],
 }) => {
   if (!isOpen) return null;
 
@@ -59,6 +62,7 @@ export const AddSpotModal: React.FC<AddSpotModalProps> = ({
   const [errorMsg, setErrorMsg] = useState('');
   const [isGeolocating, setIsGeolocating] = useState(false);
   const [gpsSuccessMsg, setGpsSuccessMsg] = useState('');
+  const [isGpsLocated, setIsGpsLocated] = useState(false);
 
   // Sync fields when editingSpot or initialCoords changes
   React.useEffect(() => {
@@ -199,6 +203,15 @@ export const AddSpotModal: React.FC<AddSpotModalProps> = ({
     const safeLat = isValidCoord(lat, lng) ? Number(lat) : -6.2088;
     const safeLng = isValidCoord(lat, lng) ? Number(lng) : 106.8456;
 
+    // Check 200m Proximity Limit to avoid duplicates in the same area
+    const nearby = findNearbySpot(safeLat, safeLng, existingSpots, editingSpot?.id, 200);
+    if (nearby) {
+      setErrorMsg(
+        `🚫 TERLALU DEKAT! Sudah ada kedai "${nearby.spot.name}" dalam radius ${nearby.distance} meter dari koordinat ini. Minimal jarak antar tempat bakso adalah 200 meter!`
+      );
+      return;
+    }
+
     soundFx.playSuccess();
 
     onSaveSpot({
@@ -218,6 +231,7 @@ export const AddSpotModal: React.FC<AddSpotModalProps> = ({
       photoUrl,
       visitDate: editingSpot ? editingSpot.visitDate : new Date().toISOString().split('T')[0],
       tags,
+      isGpsLocated,
     });
 
     onClose();
@@ -343,6 +357,16 @@ export const AddSpotModal: React.FC<AddSpotModalProps> = ({
                   </button>
                 </div>
               </div>
+
+              {isGpsLocated ? (
+                <p className="text-[10px] text-emerald-300 font-pixel bg-emerald-950/80 p-1.5 rounded border border-emerald-600 flex items-center gap-1">
+                  <span>✨ Lokasi Asli GPS (+100 XP Bonus Eksplorasi)</span>
+                </p>
+              ) : (
+                <p className="text-[10px] text-amber-300/90 font-pixel bg-amber-950/60 p-1.5 rounded border border-amber-800 flex items-center gap-1">
+                  <span>🛡️ Pencatatan Manual Peta (+0 XP - Mencegah Farming Level)</span>
+                </p>
+              )}
 
               {gpsSuccessMsg && (
                 <p className="text-[11px] text-emerald-300 font-bold bg-emerald-950/60 p-2 rounded border border-emerald-600">

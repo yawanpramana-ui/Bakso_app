@@ -33,8 +33,8 @@ import {
   arrayUnion,
   arrayRemove,
 } from './lib/firebase';
-import { getDocs } from 'firebase/firestore';
-import { Navigation } from 'lucide-react';
+import { MapChatDrawer } from './components/MapChatDrawer';
+import { Navigation, MessageSquare } from 'lucide-react';
 
 
 const STORAGE_KEY_SPOTS = 'bakso_quest_spots_v1';
@@ -100,6 +100,7 @@ export default function App() {
   const [gpsNotice, setGpsNotice] = useState<string | null>(null);
   const [gpsConfirmCoords, setGpsConfirmCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [levelUpInfo, setLevelUpInfo] = useState<{ newLevel: number; newTitle: string } | null>(null);
+  const [isMapChatOpen, setIsMapChatOpen] = useState<boolean>(false);
 
   // Firebase Auth & Multiplayer Party States
   const [currentUser, setCurrentUser] = useState<{
@@ -110,6 +111,20 @@ export default function App() {
   } | null>(null);
   const [currentParty, setCurrentParty] = useState<Party | null>(null);
   const [isMultiplayerModalOpen, setIsMultiplayerModalOpen] = useState<boolean>(false);
+
+  // Realtime Squad Toast Notification State
+  const [squadNotice, setSquadNotice] = useState<{
+    id: string;
+    type: 'spot' | 'chat';
+    title: string;
+    message: string;
+    spot?: BaksoSpot;
+    timestamp: number;
+  } | null>(null);
+  const initialMountTimeRef = React.useRef<number>(Date.now());
+  const knownSpotIdsRef = React.useRef<Set<string>>(new Set());
+  const knownMsgIdsRef = React.useRef<Set<string>>(new Set());
+  const knownGlobalMsgIdsRef = React.useRef<Set<string>>(new Set());
 
   // Map state
   const [mapCenter, setMapCenter] = useState<[number, number]>([-6.2088, 106.8456]);
@@ -134,6 +149,15 @@ export default function App() {
       if (userUnsub) {
         userUnsub();
         userUnsub = null;
+      }
+
+      if (!user) {
+        try {
+          await signInAnonymously(auth);
+        } catch (err) {
+          console.warn('Anonymous auth sign-in error:', err);
+        }
+        return;
       }
 
       if (user) {
@@ -244,7 +268,30 @@ export default function App() {
             firestoreSpots.push({ id: docSnap.id, ...docSnap.data() } as BaksoSpot);
           });
 
-          // Sync spots state directly with Firestore dataset
+          // Detect new spot added by another squad member
+          if (knownSpotIdsRef.current.size > 0 && currentUser) {
+            const newlyAdded = firestoreSpots.find(
+              (s) =>
+                !knownSpotIdsRef.current.has(s.id) &&
+                s.ownerId !== currentUser.uid &&
+                s.addedByName !== profile.name &&
+                (s.createdAt || 0) > initialMountTimeRef.current - 10000
+            );
+
+            if (newlyAdded) {
+              soundFx.playSuccess();
+              setSquadNotice({
+                id: newlyAdded.id,
+                type: 'spot',
+                title: '🍲 SPOT BAKSO BARU DISINKRONKAN!',
+                message: `${newlyAdded.addedByName || 'Teman Squad'} menambahkan "${newlyAdded.name}"!`,
+                spot: newlyAdded,
+                timestamp: Date.now(),
+              });
+            }
+          }
+
+          knownSpotIdsRef.current = new Set(firestoreSpots.map((s) => s.id));
           setSpots(firestoreSpots);
         },
         (err) => {
@@ -257,6 +304,83 @@ export default function App() {
       // ignore
     }
   }, [currentUser?.uid, currentParty?.id]);
+
+  // Realtime Chat Message Notification Detection
+  useEffect(() => {
+    if (!currentParty?.messages || !Array.isArray(currentParty.messages) || !currentUser) return;
+
+    if (knownMsgIdsRef.current.size > 0) {
+      const newMsg = currentParty.messages.find(
+        (m) =>
+          !knownMsgIdsRef.current.has(m.id || `${m.senderName}-${m.createdAt}`) &&
+          m.senderUid !== currentUser.uid &&
+          m.senderName !== profile.name &&
+          m.createdAt > initialMountTimeRef.current - 10000
+      );
+
+      if (newMsg) {
+        soundFx.playClick();
+        setSquadNotice({
+          id: newMsg.id || `msg-${Date.now()}`,
+          type: 'chat',
+          title: `💬 PESAN SQUAD DARI ${newMsg.senderName.toUpperCase()}`,
+          message: `"${newMsg.text}"`,
+          timestamp: Date.now(),
+        });
+      }
+    }
+
+    knownMsgIdsRef.current = new Set(currentParty.messages.map((m) => m.id || `${m.senderName}-${m.createdAt}`));
+  }, [currentParty?.messages, currentUser?.uid, profile.name]);
+
+  // Realtime Global Chat Toast Notification Listener
+  useEffect(() => {
+    if (!currentUser) return;
+    try {
+      const roomRef = doc(db, 'global_chat', 'room');
+      const unsub = onSnapshot(
+        roomRef,
+        (docSnap) => {
+          if (docSnap.exists()) {
+            const msgs = (docSnap.data().messages || []) as ChatMessage[];
+            if (knownGlobalMsgIdsRef.current.size > 0) {
+              const newMsg = msgs.find(
+                (m) =>
+                  !knownGlobalMsgIdsRef.current.has(m.id || `${m.senderName}-${m.createdAt}`) &&
+                  m.senderUid !== currentUser.uid &&
+                  m.senderName !== profile.name &&
+                  (m.createdAt || 0) > initialMountTimeRef.current - 10000
+              );
+              if (newMsg) {
+                soundFx.playClick();
+                setSquadNotice({
+                  id: newMsg.id || `global-${Date.now()}`,
+                  type: 'chat',
+                  title: `🌐 PESAN GLOBAL DARI ${(newMsg.senderName || 'Hunter').toUpperCase()}`,
+                  message: `"${newMsg.text}"`,
+                  timestamp: Date.now(),
+                });
+              }
+            }
+            knownGlobalMsgIdsRef.current = new Set(msgs.map((m) => m.id || `${m.senderName}-${m.createdAt}`));
+          }
+        },
+        (err) => console.warn('App global chat listener error:', err)
+      );
+      return () => unsub();
+    } catch {
+      // ignore
+    }
+  }, [currentUser?.uid, profile.name]);
+
+  // Auto-dismiss squad toast notification after 6 seconds
+  useEffect(() => {
+    if (!squadNotice) return;
+    const timer = setTimeout(() => {
+      setSquadNotice(null);
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [squadNotice?.id, squadNotice?.timestamp]);
 
   // Multiplayer Party Functions
   const handleLoginGoogle = async () => {
@@ -292,7 +416,8 @@ export default function App() {
       throw new Error('Anda belum login. Silakan klik Login terlebih dahulu.');
     }
     try {
-      const inviteCode = 'BKSO' + Math.random().toString(36).substring(2, 6).toUpperCase();
+      // 6-character clean invite code (e.g., BK9X82)
+      const inviteCode = 'BK' + Math.random().toString(36).substring(2, 6).toUpperCase();
       const userName = profile.name || currentUser.displayName || 'Hunter Pentol';
       const partyData = {
         name: partyName.trim(),
@@ -320,8 +445,15 @@ export default function App() {
     if (!currentUser) return false;
     try {
       const cleanCode = inviteCode.toUpperCase().trim();
-      const partyQuery = query(collection(db, 'parties'), where('inviteCode', '==', cleanCode));
-      const partyDocs = await getDocs(partyQuery);
+      let partyQuery = query(collection(db, 'parties'), where('inviteCode', '==', cleanCode));
+      let partyDocs = await getDocs(partyQuery);
+
+      // Fallback search if user typed 6 chars of an older 8-char code starting with BKSO
+      if (partyDocs.empty && !cleanCode.startsWith('BKSO') && cleanCode.length === 6) {
+        const legacyCode = 'BKSO' + cleanCode.slice(2);
+        partyQuery = query(collection(db, 'parties'), where('inviteCode', '==', legacyCode));
+        partyDocs = await getDocs(partyQuery);
+      }
 
       if (partyDocs.empty) return false;
 
@@ -451,8 +583,11 @@ export default function App() {
   };
 
   // Save new spot or update existing spot
-  const handleSaveSpot = async (spotData: Omit<BaksoSpot, 'id' | 'createdAt'> & { id?: string; createdAt?: number }) => {
+  const handleSaveSpot = async (
+    spotData: Omit<BaksoSpot, 'id' | 'createdAt'> & { id?: string; createdAt?: number; isGpsLocated?: boolean }
+  ) => {
     const isEdit = Boolean(spotData.id);
+    const isGps = Boolean(spotData.isGpsLocated);
     const spotId = spotData.id || `spot-${Date.now()}`;
     const createdAt = spotData.createdAt || Date.now();
 
@@ -501,8 +636,8 @@ export default function App() {
       }
     }
 
-    if (!isEdit) {
-      // Award +100 XP only for newly added spots
+    if (!isEdit && isGps) {
+      // Award +100 XP only for new spots added via authentic GPS location
       addXp(100);
     }
   };
@@ -668,6 +803,65 @@ export default function App() {
         </div>
       )}
 
+      {/* Realtime Squad Event Toast Banner */}
+      {squadNotice && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-40 bg-[#1e1726]/95 backdrop-blur-md border-3 border-[#ffd700] text-amber-100 px-4 py-3 rounded-2xl shadow-2xl font-pixel animate-bounce max-w-lg w-[90vw] flex items-center justify-between gap-3 pixel-border-gold">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="text-2xl shrink-0">
+              {squadNotice.type === 'spot' ? '🍲' : '💬'}
+            </span>
+            <div className="min-w-0">
+              <h4 className="text-xs text-[#ffd700] font-bold truncate">
+                {squadNotice.title}
+              </h4>
+              <p className="text-[11px] font-sans-clean text-amber-200 truncate leading-snug">
+                {squadNotice.message}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            {squadNotice.type === 'spot' && squadNotice.spot && (
+              <button
+                onClick={() => {
+                  soundFx.playClick();
+                  const targetSpot = squadNotice.spot!;
+                  setSelectedSpot(targetSpot);
+                  if (isValidCoord(targetSpot.lat, targetSpot.lng)) {
+                    setMapCenter([targetSpot.lat, targetSpot.lng]);
+                  }
+                  setIsDetailModalOpen(true);
+                  setSquadNotice(null);
+                }}
+                className="px-2.5 py-1 bg-[#800000] hover:bg-red-800 text-[#ffd700] border border-[#ffd700] rounded-xl text-[10px] font-bold shadow active:scale-95 whitespace-nowrap"
+              >
+                📍 LIHAT DI PETA
+              </button>
+            )}
+
+            {squadNotice.type === 'chat' && (
+              <button
+                onClick={() => {
+                  soundFx.playClick();
+                  setIsMapChatOpen(true);
+                  setSquadNotice(null);
+                }}
+                className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-amber-950 border border-amber-200 rounded-xl text-[10px] font-bold shadow active:scale-95 whitespace-nowrap"
+              >
+                💬 BALAS CHAT
+              </button>
+            )}
+
+            <button
+              onClick={() => setSquadNotice(null)}
+              className="p-1 text-amber-400 hover:text-red-400 text-xs font-bold"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Main Fullscreen Interactive Map */}
       <main className="w-full h-full relative z-0">
         <BaksoMap
@@ -694,15 +888,45 @@ export default function App() {
           center={mapCenter}
         />
 
-        {/* Floating GPS Button on Map */}
-        <button
-          onClick={handleTriggerGpsLocation}
-          title="Tambah Bakso Berdasarkan GPS Lokasi Saya Sekarang"
-          className="absolute bottom-6 left-3 sm:left-6 z-20 px-2.5 py-2 sm:px-3.5 sm:py-2.5 bg-[#800000] hover:bg-[#a00000] text-[#ffd700] border-2 border-[#ffd700] rounded-xl shadow-[4px_4px_0px_#2d1b15] font-pixel text-[10px] sm:text-xs flex items-center gap-1.5 sm:gap-2 active:translate-y-0.5 transition-transform max-w-[170px] sm:max-w-none"
-        >
-          <Navigation className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current text-emerald-400 shrink-0" />
-          <span className="truncate">📍 LOKASI GPS SAYA</span>
-        </button>
+        {/* Floating Controls at Bottom Left of Map */}
+        <div className="absolute bottom-6 left-3 sm:left-6 z-20 flex items-center gap-2">
+          {/* Floating GPS Button */}
+          <button
+            onClick={handleTriggerGpsLocation}
+            title="Tambah Bakso Berdasarkan GPS Lokasi Saya Sekarang"
+            className="px-2.5 py-2 sm:px-3.5 sm:py-2.5 bg-[#800000] hover:bg-[#a00000] text-[#ffd700] border-2 border-[#ffd700] rounded-xl shadow-[4px_4px_0px_#2d1b15] font-pixel text-[10px] sm:text-xs flex items-center gap-1.5 sm:gap-2 active:translate-y-0.5 transition-transform max-w-[170px] sm:max-w-none"
+          >
+            <Navigation className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current text-emerald-400 shrink-0" />
+            <span className="truncate">📍 LOKASI GPS SAYA</span>
+          </button>
+
+          {/* Floating Squad Chat Toggle Button */}
+          <button
+            onClick={() => {
+              soundFx.playClick();
+              setIsMapChatOpen(!isMapChatOpen);
+            }}
+            title="Buka Obrolan Squad Realtime di Peta"
+            className={`px-2.5 py-2 sm:px-3.5 sm:py-2.5 rounded-xl border-2 font-pixel text-[10px] sm:text-xs flex items-center gap-1.5 sm:gap-2 active:translate-y-0.5 transition-transform shadow-[4px_4px_0px_#2d1b15] ${
+              isMapChatOpen
+                ? 'bg-[#ffd700] text-amber-950 border-white font-bold'
+                : 'bg-[#800000] hover:bg-[#a00000] text-[#ffd700] border-[#ffd700]'
+            }`}
+          >
+            <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-sky-300 shrink-0" />
+            <span>💬 CHAT SQUAD</span>
+          </button>
+        </div>
+
+        {/* Floating Map Squad Live Chat Drawer */}
+        <MapChatDrawer
+          isOpen={isMapChatOpen}
+          onClose={() => setIsMapChatOpen(false)}
+          currentParty={currentParty}
+          currentUser={currentUser}
+          profile={profile}
+          onOpenMultiplayerModal={() => setIsMultiplayerModalOpen(true)}
+        />
       </main>
 
       {/* Game Settings & Halaman Utama Modal */}
@@ -735,6 +959,7 @@ export default function App() {
         initialCoords={pendingCoords}
         onPickFromMap={handleStartPickFromMap}
         editingSpot={editingSpot}
+        existingSpots={spots}
       />
 
       {/* "Lihat Detail Kunjungan" Modal */}

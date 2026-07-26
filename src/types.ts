@@ -70,5 +70,16 @@ export interface Party {
   memberNames?: { [uid: string]: string };
   inviteCode: string;
   createdAt: number;
+  messages?: ChatMessage[];
+}
+
+export interface ChatMessage {
+  id: string;
+  partyId: string;
+  senderUid: string;
+  senderName: string;
+  senderAvatar: ExpressionId;
+  text: string;
+  createdAt: number;
 }
 

@@ -265,8 +265,11 @@ export const BaksoMap: React.FC<BaksoMapProps> = ({
             <h4 class="text-base font-bold text-[#ffd700] leading-tight mb-1 font-pixel tracking-tight">
               ${spot.name}
             </h4>
-            <p class="text-xs text-amber-100/90 mb-2 truncate">
+            <p class="text-xs text-amber-100/90 mb-1 truncate">
               📍 ${spot.address}
+            </p>
+            <p class="text-[10px] font-pixel text-amber-300 mb-2">
+              👤 Ditambahkan oleh: <strong>${spot.addedByName || 'Hunter'}</strong>
             </p>
 
             <!-- Photo Thumbnail if present -->

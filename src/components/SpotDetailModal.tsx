@@ -70,6 +70,10 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
                 <span className="text-xs font-arcade text-amber-300 shrink-0">
                   Price: <strong className="text-amber-200">{spot.priceRange}</strong>
                 </span>
+                <span className="text-[10px] bg-amber-950 text-amber-200 border border-amber-700 px-2 py-0.5 rounded font-pixel flex items-center gap-1 shrink-0">
+                  <span>👤 Oleh:</span>
+                  <strong className="text-[#ffd700]">{spot.addedByName || 'Hunter'}</strong>
+                </span>
               </div>
               <h2 className="text-lg sm:text-2xl font-pixel text-amber-300 tracking-tight leading-tight break-words">
                 {spot.name}
