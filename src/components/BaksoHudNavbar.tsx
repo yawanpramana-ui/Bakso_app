@@ -61,7 +61,7 @@ export const BaksoHudNavbar: React.FC<BaksoHudNavbarProps> = ({
   };
 
   return (
-    <header className="absolute top-0 left-0 right-0 z-30 p-2 sm:p-4 pointer-events-none">
+    <header className="absolute top-0 left-0 right-0 z-40 p-2 sm:p-4 pointer-events-auto">
       <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2.5 pointer-events-auto">
         
         {/* Brand Title RPG Badge (Clicking opens Layar Utama) */}

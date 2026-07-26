@@ -90,7 +90,7 @@ export default function App() {
   // UI States
   const [showSplash, setShowSplash] = useState<boolean>(true);
   const [selectedSpot, setSelectedSpot] = useState<BaksoSpot | null>(null);
-  const [isHomeScreenOpen, setIsHomeScreenOpen] = useState<boolean>(true);
+  const [isHomeScreenOpen, setIsHomeScreenOpen] = useState<boolean>(false);
   const [isBadgesOpen, setIsBadgesOpen] = useState<boolean>(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState<boolean>(false);
@@ -887,7 +887,14 @@ export default function App() {
     <div className="relative w-screen h-screen overflow-hidden bg-[#120e17] font-sans-clean select-none">
       
       {/* Splash Screen on Application Load */}
-      {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
+      {showSplash && (
+        <SplashScreen
+          onFinish={() => {
+            setShowSplash(false);
+            setIsHomeScreenOpen(true);
+          }}
+        />
+      )}
 
       {/* Scanlines Overlay Effect for CRT Retro Feel */}
       {isScanlinesOn && <div className="absolute inset-0 scanlines z-20 pointer-events-none opacity-40" />}
@@ -899,7 +906,18 @@ export default function App() {
         partyName={currentParty?.name}
         currentUser={currentUser}
         onOpenMultiplayer={() => setIsMultiplayerModalOpen(true)}
-        onOpenHomeScreen={() => setIsHomeScreenOpen(true)}
+        onOpenHomeScreen={() => {
+          console.log('[BaksoQuest] Opening Home Screen...');
+          setIsAddModalOpen(false);
+          setIsDetailModalOpen(false);
+          setIsProfileModalOpen(false);
+          setIsJournalOpen(false);
+          setIsSettingsOpen(false);
+          setIsBadgesOpen(false);
+          setIsMultiplayerModalOpen(false);
+          setIsHomeScreenOpen(true);
+          console.log('[BaksoQuest] isHomeScreenOpen set to true');
+        }}
         onOpenBadges={() => setIsBadgesOpen(true)}
         onOpenProfile={() => setIsProfileModalOpen(true)}
         onOpenJournal={() => setIsJournalOpen(!isJournalOpen)}
@@ -1065,7 +1083,7 @@ export default function App() {
       />
 
       {/* Log / Add / Edit Spot Modal */}
-      <ErrorBoundary key={isAddModalOpen ? 'open' : 'closed'} componentName="Tambah Tempat Bakso" onClose={() => setIsAddModalOpen(false)}>
+      <ErrorBoundary key={isAddModalOpen ? 'add-open' : 'add-closed'} componentName="Tambah Tempat Bakso" onClose={() => setIsAddModalOpen(false)}>
         <AddSpotModal
           isOpen={isAddModalOpen}
           onClose={() => {
@@ -1099,8 +1117,8 @@ export default function App() {
         }}
       />
 
-      {/* Hunter Status & Achievements Profile Modal */}
-      <ErrorBoundary key={isProfileModalOpen ? 'open' : 'closed'} componentName="Profil Hunter" onClose={() => setIsProfileModalOpen(false)}>
+      {/* Hunter Profile Modal */}
+      <ErrorBoundary key={isProfileModalOpen ? 'profile-open' : 'profile-closed'} componentName="Profil Hunter" onClose={() => setIsProfileModalOpen(false)}>
         <HunterProfileModal
           isOpen={isProfileModalOpen}
           onClose={() => setIsProfileModalOpen(false)}
@@ -1142,29 +1160,31 @@ export default function App() {
       />
 
       {/* Layar Utama / Home Screen Modal (Game Title Screen) */}
-      <HomeScreenModal
-        isOpen={isHomeScreenOpen}
-        onClose={() => setIsHomeScreenOpen(false)}
-        profile={profile}
-        spots={spots}
-        currentUser={currentUser}
-        onLoginGoogle={handleLoginGoogle}
-        onOpenMultiplayer={() => setIsMultiplayerModalOpen(true)}
-        onOpenAddSpot={() => {
-          setPendingCoords(null);
-          setIsAddModalOpen(true);
-        }}
-        onOpenJournal={() => setIsJournalOpen(true)}
-        onOpenProfile={() => setIsProfileModalOpen(true)}
-        onOpenBadges={() => setIsBadgesOpen(true)}
-        onOpenSettings={() => setIsSettingsOpen(true)}
-        onSelectSpot={(spot) => {
-          setSelectedSpot(spot);
-          if (spot && isValidCoord(spot.lat, spot.lng)) {
-            setMapCenter([Number(spot.lat), Number(spot.lng)]);
-          }
-        }}
-      />
+      {isHomeScreenOpen && (
+        <HomeScreenModal
+          isOpen={true}
+          onClose={() => setIsHomeScreenOpen(false)}
+          profile={profile}
+          spots={spots}
+          currentUser={currentUser}
+          onLoginGoogle={handleLoginGoogle}
+          onOpenMultiplayer={() => setIsMultiplayerModalOpen(true)}
+          onOpenAddSpot={() => {
+            setPendingCoords(null);
+            setIsAddModalOpen(true);
+          }}
+          onOpenJournal={() => setIsJournalOpen(true)}
+          onOpenProfile={() => setIsProfileModalOpen(true)}
+          onOpenBadges={() => setIsBadgesOpen(true)}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          onSelectSpot={(spot) => {
+            setSelectedSpot(spot);
+            if (spot && isValidCoord(spot.lat, spot.lng)) {
+              setMapCenter([Number(spot.lat), Number(spot.lng)]);
+            }
+          }}
+        />
+      )}
 
       {/* System Badges & Achievements Modal */}
       <SystemBadgesModal
@@ -1218,8 +1238,8 @@ export default function App() {
         </div>
       )}
 
-      {/* Multiplayer Party & Auth Modal */}
-      <ErrorBoundary key={isMultiplayerModalOpen ? 'open' : 'closed'} componentName="Kelola Squad" onClose={() => setIsMultiplayerModalOpen(false)}>
+      {/* Multiplayer Party / Squad Modal */}
+      <ErrorBoundary key={isMultiplayerModalOpen ? 'multi-open' : 'multi-closed'} componentName="Kelola Squad" onClose={() => setIsMultiplayerModalOpen(false)}>
         <MultiplayerPartyModal
           isOpen={isMultiplayerModalOpen}
           onClose={() => setIsMultiplayerModalOpen(false)}
