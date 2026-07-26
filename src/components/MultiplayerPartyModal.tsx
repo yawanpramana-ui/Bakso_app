@@ -96,17 +96,21 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
     if (!currentParty || !isOpen) return;
 
     const unsubs: (() => void)[] = [];
-    const profilesMap: Record<string, MemberProfileData> = {};
+    const memberIds = Array.isArray(currentParty.memberIds)
+      ? currentParty.memberIds.filter((id): id is string => typeof id === 'string' && !!id)
+      : [];
 
-    currentParty.memberIds.forEach((uid) => {
-      // Set default for current user immediately
-      if (uid === currentUser?.uid) {
-        profilesMap[uid] = {
-          level: profile.level,
-          xp: profile.xp,
-          name: profile.name,
-          avatarExpression: profile.avatarExpression,
-        };
+    memberIds.forEach((uid) => {
+      if (currentUser?.uid && uid === currentUser.uid) {
+        setMemberProfiles((prev) => ({
+          ...prev,
+          [uid]: {
+            level: profile?.level || 1,
+            xp: profile?.xp || 0,
+            name: profile?.name || 'Hunter',
+            avatarExpression: profile?.avatarExpression || 'happy',
+          },
+        }));
       }
 
       try {
@@ -114,13 +118,15 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
         const unsub = onSnapshot(uRef, (snap) => {
           if (snap.exists()) {
             const data = snap.data();
-            profilesMap[uid] = {
-              level: data.level || 1,
-              xp: data.xp || 0,
-              name: data.name || currentParty.memberNames?.[uid],
-              avatarExpression: data.avatarExpression,
-            };
-            setMemberProfiles((prev) => ({ ...prev, [uid]: profilesMap[uid] }));
+            setMemberProfiles((prev) => ({
+              ...prev,
+              [uid]: {
+                level: data.level || 1,
+                xp: data.xp || 0,
+                name: data.name || currentParty.memberNames?.[uid] || 'Hunter',
+                avatarExpression: data.avatarExpression || 'happy',
+              },
+            }));
           }
         });
         unsubs.push(unsub);
@@ -128,8 +134,6 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
         // ignore
       }
     });
-
-    setMemberProfiles((prev) => ({ ...profilesMap, ...prev }));
 
     // Merge currentParty.messages if available
     if (currentParty.messages && Array.isArray(currentParty.messages)) {
@@ -151,7 +155,6 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
           snapshot.forEach((docSnap) => {
             msgs.push({ id: docSnap.id, ...docSnap.data() } as ChatMessage);
           });
-          // Sort by timestamp ascending locally (index-free realtime sync)
           msgs.sort((a, b) => a.createdAt - b.createdAt);
           setMessages((prev) => {
             const map = new Map<string, ChatMessage>();
@@ -175,7 +178,7 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
     return () => {
       unsubs.forEach((fn) => fn());
     };
-  }, [currentParty?.id, currentParty?.memberIds, currentParty?.messages, isOpen, currentUser?.uid, profile.level, profile.xp, profile.name]);
+  }, [currentParty?.id, currentParty?.memberIds?.join(','), currentParty?.messages, isOpen, currentUser?.uid, profile?.level, profile?.xp, profile?.name]);
 
   const handleSendMessage = async (textToSend?: string) => {
     const msgText = (textToSend || chatInput).trim();
@@ -185,7 +188,7 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
     setChatInput('');
 
     const senderUid = currentUser?.uid || 'guest-' + Date.now();
-    const senderName = profile.name || 'Hunter';
+    const senderName = profile?.name || 'Hunter';
     const createdAt = Date.now();
     const msgId = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
 
@@ -194,12 +197,11 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
       partyId: currentParty.id,
       senderUid,
       senderName,
-      senderAvatar: profile.avatarExpression || 'happy',
+      senderAvatar: profile?.avatarExpression || 'happy',
       text: msgText,
       createdAt,
     };
 
-    // Optimistic UI update so message shows up IMMEDIATELY locally
     setMessages((prev) => {
       const exists = prev.some(
         (m) => m.id === msgId || (m.text === msgText && m.senderName === senderName && Math.abs(m.createdAt - createdAt) < 2000)
@@ -213,7 +215,6 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
     }, 50);
 
     try {
-      // 1. Update party doc directly so App.tsx snapshot listener receives instant update for ALL members
       await updateDoc(doc(db, 'parties', currentParty.id), {
         messages: arrayUnion(newMsgObj),
       });
@@ -222,51 +223,54 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
     }
 
     try {
-      // 2. Also save to subcollection as backup
       await setDoc(doc(db, 'parties', currentParty.id, 'messages', msgId), newMsgObj);
     } catch (err) {
       console.warn('Error sending chat message to Firestore subcollection:', err);
     }
   };
 
+  // Compute Ranked Members with full null safety
+  const rankedMembers: RankedMember[] = React.useMemo(() => {
+    if (!currentParty || !Array.isArray(currentParty.memberIds)) return [];
+
+    const memberIds = currentParty.memberIds.filter((id): id is string => typeof id === 'string' && !!id);
+    const safeSpots = Array.isArray(spots) ? spots : [];
+
+    return memberIds
+      .map((uid) => {
+        const uData = memberProfiles[uid] || {
+          level: uid === currentUser?.uid ? profile?.level || 1 : 1,
+          xp: uid === currentUser?.uid ? profile?.xp || 0 : 0,
+          name: currentParty.memberNames?.[uid] || `Hunter #${typeof uid === 'string' ? uid.slice(0, 4) : '1'}`,
+        };
+        const name = uData.name || currentParty.memberNames?.[uid] || 'Hunter';
+
+        const spotsCount = safeSpots.filter(
+          (s) => s && (s.ownerId === uid || (typeof s.addedByName === 'string' && s.addedByName.toLowerCase() === String(name).toLowerCase()))
+        ).length;
+
+        const level = Number(uData.level) || 1;
+        const xp = Number(uData.xp) || 0;
+        const totalScore = level * 1000 + xp + spotsCount * 150;
+
+        return {
+          uid,
+          name: String(name),
+          level,
+          xp,
+          spotsCount,
+          totalScore,
+          isOwner: uid === currentParty.ownerId,
+          isMe: uid === currentUser?.uid,
+          avatarExpression: uData.avatarExpression,
+          rank: 0,
+        };
+      })
+      .sort((a, b) => b.totalScore - a.totalScore)
+      .map((item, idx) => ({ ...item, rank: idx + 1 }));
+  }, [currentParty, memberProfiles, spots, currentUser?.uid, profile?.level, profile?.xp]);
+
   if (!isOpen) return null;
-
-  // Compute Ranked Members
-  const rankedMembers: RankedMember[] = currentParty
-    ? currentParty.memberIds
-        .map((uid) => {
-          const uData = memberProfiles[uid] || {
-            level: uid === currentUser?.uid ? profile.level : 1,
-            xp: uid === currentUser?.uid ? profile.xp : 0,
-            name: currentParty.memberNames?.[uid] || `Hunter #${uid.slice(0, 4)}`,
-          };
-          const name = uData.name || currentParty.memberNames?.[uid] || 'Hunter';
-
-          // Count spots contributed by this member
-          const spotsCount = spots.filter(
-            (s) => s.ownerId === uid || (s.addedByName && s.addedByName.toLowerCase() === name.toLowerCase())
-          ).length;
-
-          const level = uData.level || 1;
-          const xp = uData.xp || 0;
-          const totalScore = level * 1000 + xp + spotsCount * 150;
-
-          return {
-            uid,
-            name,
-            level,
-            xp,
-            spotsCount,
-            totalScore,
-            isOwner: uid === currentParty.ownerId,
-            isMe: uid === currentUser?.uid,
-            avatarExpression: uData.avatarExpression,
-            rank: 0,
-          };
-        })
-        .sort((a, b) => b.totalScore - a.totalScore)
-        .map((item, idx) => ({ ...item, rank: idx + 1 }))
-    : [];
 
   const myRank = rankedMembers.find((m) => m.isMe);
 
@@ -287,17 +291,22 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
     }
   };
 
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
   const handleJoinParty = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!joinCodeInput.trim()) return;
     soundFx.playClick();
     setIsLoading(true);
     setErrorMsg(null);
+    setSuccessMsg(null);
     try {
       const success = await onJoinPartyByCode(joinCodeInput.trim());
       if (success) {
         setJoinCodeInput('');
         soundFx.playSuccess();
+        setSuccessMsg('🎉 Berhasil bergabung ke Squad!');
+        setTimeout(() => setSuccessMsg(null), 4000);
       } else {
         setErrorMsg('Kode invite tidak ditemukan. Pastikan 6 karakter kode sudah benar.');
       }
@@ -394,6 +403,13 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
             </button>
           )}
         </div>
+
+        {successMsg && (
+          <div className="p-3 bg-emerald-950/90 border border-emerald-500 rounded-xl text-emerald-200 text-xs flex items-center gap-2 animate-bounce">
+            <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span className="font-bold">{successMsg}</span>
+          </div>
+        )}
 
         {errorMsg && (
           <div className="p-3 bg-red-950/80 border border-red-600 rounded-xl text-red-200 text-xs flex items-center gap-2">
@@ -702,10 +718,10 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
                 <div>
                   <h4 className="text-xs text-amber-300 font-bold mb-2 flex items-center gap-1.5">
                     <Users className="w-4 h-4 text-[#ffd700]" />
-                    <span>ANGGOTA SQUAD TERDAFTAR ({currentParty.memberIds.length} PEMBURU)</span>
+                    <span>ANGGOTA SQUAD TERDAFTAR ({(currentParty.memberIds || []).length} PEMBURU)</span>
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {currentParty.memberIds.map((memberId, idx) => {
+                    {(currentParty.memberIds || []).map((memberId, idx) => {
                       const name = currentParty.memberNames?.[memberId] || `Hunter #${idx + 1}`;
                       const isOwner = memberId === currentParty.ownerId;
                       const isMe = memberId === currentUser?.uid;
@@ -903,10 +919,17 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
                   <input
                     type="text"
                     required
-                    maxLength={12}
-                    placeholder="misal: BK9X82"
+                    maxLength={100}
+                    placeholder="misal: BK9X82 atau paste link"
                     value={joinCodeInput}
-                    onChange={(e) => setJoinCodeInput(e.target.value.toUpperCase())}
+                    onChange={(e) => {
+                      let val = e.target.value;
+                      if (val.includes('party=')) {
+                        val = val.split('party=')[1].split('&')[0];
+                      }
+                      val = val.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+                      setJoinCodeInput(val);
+                    }}
                     className="w-full p-2.5 bg-[#181320] border border-amber-700 rounded-xl text-xs text-center font-mono font-bold tracking-widest text-[#ffd700] placeholder-amber-600/70 focus:border-[#ffd700] outline-none"
                   />
                 </div>

@@ -17,7 +17,15 @@ export const CharacterAvatar: React.FC<CharacterAvatarProps> = ({
   className = '',
   onClick,
 }) => {
-  const exprData = EXPRESSIONS[expression] || EXPRESSIONS.happy;
+  const safeExprId = expression && EXPRESSIONS[expression] ? expression : 'happy';
+  const exprData = EXPRESSIONS[safeExprId] || {
+    id: 'happy',
+    name: 'Senang',
+    description: 'Pemberani & gembira',
+    emoji: '😊',
+    bgHex: '#10B981',
+    borderColor: '#059669',
+  };
 
   const sizeMap = {
     sm: 'w-8 h-8 text-xs',

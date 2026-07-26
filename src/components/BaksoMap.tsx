@@ -230,12 +230,12 @@ export const BaksoMap: React.FC<BaksoMapProps> = ({
   // Render Map Spot Markers
   useEffect(() => {
     if (!mapRef.current || !markersGroupRef.current) return;
-
     const map = mapRef.current;
     const markersGroup = markersGroupRef.current;
     markersGroup.clearLayers();
 
-    spots.forEach((spot) => {
+    const safeSpots = Array.isArray(spots) ? spots : [];
+    safeSpots.forEach((spot) => {
       if (!spot || !isValidCoord(spot.lat, spot.lng)) return;
 
       const spotLat = Number(spot.lat);

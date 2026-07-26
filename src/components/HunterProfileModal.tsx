@@ -32,17 +32,19 @@ export const HunterProfileModal: React.FC<HunterProfileModalProps> = ({
     return 'Legenda Bakso Nusantara 👑';
   };
 
-  // Calculate stats & XP dynamically
-  const totalSpots = spots.length;
-  const perfectSpots = spots.filter((s) => s.rating === 5).length;
-  const spicySpots = spots.filter((s) => s.sambalLevel >= 4).length;
-  const totalXp = profile.xp;
-  const nextLevelXp = profile.nextLevelXp;
+  // Calculate stats & XP dynamically with full null safety
+  const safeSpots = spots || [];
+  const safeProfile = profile || { level: 1, xp: 0, nextLevelXp: 100, name: 'Hunter', title: 'Pemburu Amatir' };
+  const totalSpots = safeSpots.length;
+  const perfectSpots = safeSpots.filter((s) => s && s.rating === 5).length;
+  const spicySpots = safeSpots.filter((s) => s && (s.sambalLevel || 0) >= 4).length;
+  const totalXp = safeProfile.xp || 0;
+  const nextLevelXp = safeProfile.nextLevelXp || (safeProfile.level || 1) * 100 + 200;
   const xpNeeded = Math.max(0, nextLevelXp - totalXp);
-  const xpProgressPercent = Math.min(100, Math.max(0, Math.round((totalXp / nextLevelXp) * 100)));
+  const xpProgressPercent = nextLevelXp > 0 ? Math.min(100, Math.max(0, Math.round((totalXp / nextLevelXp) * 100))) : 0;
 
-  const currentLevelTitle = profile.title || getTitleForLevel(profile.level);
-  const nextLevelTitle = getTitleForLevel(profile.level + 1);
+  const currentLevelTitle = safeProfile.title || getTitleForLevel(safeProfile.level || 1);
+  const nextLevelTitle = getTitleForLevel((safeProfile.level || 1) + 1);
 
   const achievements: Achievement[] = [
     {
@@ -113,18 +115,18 @@ export const HunterProfileModal: React.FC<HunterProfileModalProps> = ({
         {/* Character Card Main Frame */}
         <div className="bg-[#281f33] p-4 rounded-xl border-2 border-amber-700/80 mb-5 relative overflow-hidden">
           <div className="flex flex-col sm:flex-row items-center gap-4">
-            <CharacterAvatar expression={profile.avatarExpression} size="xl" />
+            <CharacterAvatar expression={safeProfile.avatarExpression || 'star'} size="xl" />
 
             <div className="flex-1 text-center sm:text-left w-full min-w-0">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1">
                 <input
                   type="text"
-                  value={profile.name}
+                  value={safeProfile.name || 'Hunter'}
                   onChange={(e) => onUpdateProfile({ name: e.target.value })}
                   className="bg-transparent text-xl font-pixel text-amber-300 border-b border-dashed border-amber-600 focus:border-amber-300 outline-none w-full sm:max-w-[280px] truncate"
                 />
                 <span className="text-xs font-pixel text-[#ffd700] bg-[#800000] px-3 py-1 rounded-lg border-2 border-[#ffd700] shrink-0 font-bold shadow-md self-center sm:self-auto">
-                  LEVEL {profile.level}
+                  LEVEL {safeProfile.level || 1}
                 </span>
               </div>
 
@@ -190,7 +192,7 @@ export const HunterProfileModal: React.FC<HunterProfileModalProps> = ({
                     onUpdateProfile({ avatarExpression: expr.id });
                   }}
                   className={`p-1 rounded-xl border transition-all ${
-                    profile.avatarExpression === expr.id
+                    (safeProfile.avatarExpression || 'star') === expr.id
                       ? 'bg-amber-950 border-amber-400 scale-110'
                       : 'bg-[#181320] border-amber-900 opacity-70 hover:opacity-100'
                   }`}

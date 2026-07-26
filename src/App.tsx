@@ -12,6 +12,7 @@ import { SystemBadgesModal } from './components/SystemBadgesModal';
 import { LevelUpModal } from './components/LevelUpModal';
 import { MultiplayerPartyModal } from './components/MultiplayerPartyModal';
 import { SplashScreen } from './components/SplashScreen';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { soundFx } from './utils/audio';
 import {
   auth,
@@ -23,6 +24,7 @@ import {
   doc,
   setDoc,
   getDoc,
+  getDocs,
   onSnapshot,
   collection,
   query,
@@ -174,12 +176,14 @@ export default function App() {
           const userSnap = await getDoc(userRef);
           if (userSnap.exists()) {
             const uData = userSnap.data();
+            const userLevel = uData.level || 1;
             setProfile((prev) => ({
               ...prev,
               name: uData.name || user.displayName || prev.name,
-              level: uData.level || prev.level,
-              xp: uData.xp || prev.xp,
-              title: getTitleForLevel(uData.level || prev.level),
+              level: userLevel,
+              xp: uData.xp || 0,
+              nextLevelXp: uData.nextLevelXp || prev.nextLevelXp || userLevel * 100 + 200,
+              title: getTitleForLevel(userLevel),
               favoriteType: uData.favoriteType || prev.favoriteType,
               avatarExpression: uData.avatarExpression || prev.avatarExpression,
             }));
@@ -189,6 +193,7 @@ export default function App() {
               name: user.displayName || profile.name,
               level: profile.level,
               xp: profile.xp,
+              nextLevelXp: profile.nextLevelXp || 300,
               createdAt: new Date().toISOString(),
             });
           }
@@ -197,12 +202,14 @@ export default function App() {
           userUnsub = onSnapshot(userRef, (docSnap) => {
             if (docSnap.exists()) {
               const uData = docSnap.data();
+              const userLevel = uData.level || 1;
               setProfile((prev) => ({
                 ...prev,
                 name: uData.name || prev.name,
-                level: uData.level || prev.level,
-                xp: uData.xp || prev.xp,
-                title: getTitleForLevel(uData.level || prev.level),
+                level: userLevel,
+                xp: uData.xp || 0,
+                nextLevelXp: uData.nextLevelXp || prev.nextLevelXp || userLevel * 100 + 200,
+                title: getTitleForLevel(userLevel),
               }));
 
               if (uData.currentPartyId) {
@@ -342,10 +349,12 @@ export default function App() {
         roomRef,
         (docSnap) => {
           if (docSnap.exists()) {
-            const msgs = (docSnap.data().messages || []) as ChatMessage[];
+            const data = docSnap.data();
+            const msgs = (data && Array.isArray(data.messages) ? data.messages : []) as ChatMessage[];
             if (knownGlobalMsgIdsRef.current.size > 0) {
               const newMsg = msgs.find(
                 (m) =>
+                  m &&
                   !knownGlobalMsgIdsRef.current.has(m.id || `${m.senderName}-${m.createdAt}`) &&
                   m.senderUid !== currentUser.uid &&
                   m.senderName !== profile.name &&
@@ -362,7 +371,7 @@ export default function App() {
                 });
               }
             }
-            knownGlobalMsgIdsRef.current = new Set(msgs.map((m) => m.id || `${m.senderName}-${m.createdAt}`));
+            knownGlobalMsgIdsRef.current = new Set(msgs.filter((m) => m && (m.id || m.senderName)).map((m) => m.id || `${m.senderName}-${m.createdAt}`));
           }
         },
         (err) => console.warn('App global chat listener error:', err)
@@ -408,6 +417,11 @@ export default function App() {
       }
     } catch (err: any) {
       console.warn('Google sign-in error:', err);
+      if (err?.code === 'auth/popup-blocked') {
+        alert('Popup Google terblokir oleh browser. Harap izinkan popup (allow popups) pada browser Anda untuk dapat login Google.');
+      } else if (err?.code !== 'auth/popup-closed-by-user') {
+        alert(`Gagal login Google: ${err?.message || 'Pastikan koneksi internet stabil dan izinkan popup browser.'}`);
+      }
     }
   };
 
@@ -441,57 +455,152 @@ export default function App() {
     }
   };
 
-  const handleJoinPartyByCode = async (inviteCode: string): Promise<boolean> => {
-    if (!currentUser) return false;
+  const handleJoinPartyByCode = async (rawCode: string): Promise<boolean> => {
+    // Auto-authenticate as guest if currentUser is not set yet
+    let activeUser = currentUser;
+    if (!activeUser) {
+      try {
+        const res = await signInAnonymously(auth);
+        activeUser = {
+          uid: res.user.uid,
+          isAnonymous: true,
+          displayName: res.user.displayName,
+        };
+        setCurrentUser(activeUser);
+      } catch (err) {
+        console.warn('Auto sign-in during party join failed:', err);
+        throw new Error('Gagal mengautentikasi akun. Pastikan koneksi internet aktif.');
+      }
+    }
+
+    if (!activeUser) {
+      throw new Error('Akun belum siap. Silakan coba beberapa detik lagi.');
+    }
+
     try {
-      const cleanCode = inviteCode.toUpperCase().trim();
+      // 1. Clean input code (extract code if full URL was pasted, strip spaces/hyphens)
+      let cleanCode = rawCode.trim();
+      if (cleanCode.includes('party=')) {
+        cleanCode = cleanCode.split('party=')[1].split('&')[0];
+      }
+      // Remove all non-alphanumeric characters (spaces, hyphens, etc.)
+      cleanCode = cleanCode.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim();
+
+      if (!cleanCode) {
+        throw new Error('Kode invite tidak boleh kosong.');
+      }
+
+      // 2. Query Firestore with multi-fallbacks
+      let targetDocId: string | null = null;
+      let targetPartyData: Party | null = null;
+
+      // Direct query by inviteCode
       let partyQuery = query(collection(db, 'parties'), where('inviteCode', '==', cleanCode));
       let partyDocs = await getDocs(partyQuery);
 
-      // Fallback search if user typed 6 chars of an older 8-char code starting with BKSO
-      if (partyDocs.empty && !cleanCode.startsWith('BKSO') && cleanCode.length === 6) {
+      if (!partyDocs.empty) {
+        targetDocId = partyDocs.docs[0].id;
+        targetPartyData = partyDocs.docs[0].data() as Party;
+      }
+
+      // Fallback 1: Try legacy 8-char code (BKSO...)
+      if (!targetDocId && !cleanCode.startsWith('BKSO') && cleanCode.length === 6) {
         const legacyCode = 'BKSO' + cleanCode.slice(2);
         partyQuery = query(collection(db, 'parties'), where('inviteCode', '==', legacyCode));
         partyDocs = await getDocs(partyQuery);
+        if (!partyDocs.empty) {
+          targetDocId = partyDocs.docs[0].id;
+          targetPartyData = partyDocs.docs[0].data() as Party;
+        }
       }
 
-      if (partyDocs.empty) return false;
+      // Fallback 2: Check direct Document ID (if rawCode is a Firestore document ID)
+      if (!targetDocId) {
+        try {
+          const directSnap = await getDoc(doc(db, 'parties', rawCode.trim()));
+          if (directSnap.exists()) {
+            targetDocId = directSnap.id;
+            targetPartyData = directSnap.data() as Party;
+          }
+        } catch {
+          // ignore
+        }
+      }
 
-      const partyDoc = partyDocs.docs[0];
-      const partyData = partyDoc.data() as Party;
-      const userName = profile.name || currentUser.displayName || 'Hunter Pentol';
+      // Fallback 3: Case-insensitive scan across all party documents
+      if (!targetDocId) {
+        const allPartiesSnap = await getDocs(collection(db, 'parties'));
+        const matchedDoc = allPartiesSnap.docs.find((d) => {
+          const code = (d.data().inviteCode || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim();
+          return (
+            code === cleanCode ||
+            (cleanCode.length >= 4 && code.endsWith(cleanCode.slice(-4))) ||
+            d.id === rawCode.trim()
+          );
+        });
+        if (matchedDoc) {
+          targetDocId = matchedDoc.id;
+          targetPartyData = matchedDoc.data() as Party;
+        }
+      }
 
-      await updateDoc(doc(db, 'parties', partyDoc.id), {
-        memberIds: arrayUnion(currentUser.uid),
-        [`memberNames.${currentUser.uid}`]: userName,
+      if (!targetDocId || !targetPartyData) {
+        throw new Error(`Kode invite "${cleanCode}" tidak ditemukan di database server. Pastikan kodenya benar.`);
+      }
+
+      const userName = profile.name || activeUser.displayName || 'Hunter Pentol';
+
+      // 3. Update User doc FIRST so userUnsub listener won't overwrite currentParty to null
+      await setDoc(doc(db, 'users', activeUser.uid), { currentPartyId: targetDocId }, { merge: true });
+
+      // 4. Update Party doc
+      await updateDoc(doc(db, 'parties', targetDocId), {
+        memberIds: arrayUnion(activeUser.uid),
+        [`memberNames.${activeUser.uid}`]: userName,
       });
 
-      await setDoc(doc(db, 'users', currentUser.uid), { currentPartyId: partyDoc.id }, { merge: true });
-
+      // 5. Update local state
       setCurrentParty({
-        ...partyData,
-        id: partyDoc.id,
-        memberIds: Array.from(new Set([...partyData.memberIds, currentUser.uid])),
-        memberNames: { ...partyData.memberNames, [currentUser.uid]: userName },
+        ...targetPartyData,
+        id: targetDocId,
+        memberIds: Array.from(new Set([...(targetPartyData.memberIds || []), activeUser.uid])),
+        memberNames: { ...(targetPartyData.memberNames || {}), [activeUser.uid]: userName },
       });
 
       return true;
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error joining party:', err);
-      return false;
+      throw new Error(err?.message || 'Gagal bergabung ke Squad. Silakan periksa koneksi internet.');
     }
   };
 
   const handleLeaveParty = async () => {
     if (!currentUser || !currentParty) return;
+    const partyId = currentParty.id;
+    const remainingMembers = (currentParty.memberIds || []).filter((uid) => uid !== currentUser.uid);
+
     try {
-      await updateDoc(doc(db, 'parties', currentParty.id), {
-        memberIds: arrayRemove(currentUser.uid),
-      });
+      // 1. Clear active party ID from user document
       await setDoc(doc(db, 'users', currentUser.uid), { currentPartyId: null }, { merge: true });
+
+      // 2. Auto Cleanup: If NO members left, delete the empty party document from Firestore
+      if (remainingMembers.length === 0) {
+        await deleteDoc(doc(db, 'parties', partyId));
+      } else {
+        // Otherwise remove user from memberIds list
+        const updates: Record<string, any> = {
+          memberIds: arrayRemove(currentUser.uid),
+        };
+        // Auto Ownership Transfer: If Leader left, assign leader role to next remaining member
+        if (currentParty.ownerId === currentUser.uid && remainingMembers.length > 0) {
+          updates.ownerId = remainingMembers[0];
+        }
+        await updateDoc(doc(db, 'parties', partyId), updates);
+      }
     } catch (err) {
       console.warn('Error leaving party:', err);
     }
+
     setCurrentParty(null);
   };
 
@@ -981,21 +1090,23 @@ export default function App() {
       />
 
       {/* Hunter Status & Achievements Profile Modal */}
-      <HunterProfileModal
-        isOpen={isProfileModalOpen}
-        onClose={() => setIsProfileModalOpen(false)}
-        profile={profile}
-        onUpdateProfile={(updated) => {
-          setProfile((p) => {
-            const next = { ...p, ...updated };
-            if (currentUser) {
-              setDoc(doc(db, 'users', currentUser.uid), next, { merge: true }).catch(() => {});
-            }
-            return next;
-          });
-        }}
-        spots={spots}
-      />
+      <ErrorBoundary key={isProfileModalOpen ? 'open' : 'closed'} componentName="Profil Hunter" onClose={() => setIsProfileModalOpen(false)}>
+        <HunterProfileModal
+          isOpen={isProfileModalOpen}
+          onClose={() => setIsProfileModalOpen(false)}
+          profile={profile}
+          onUpdateProfile={(updated) => {
+            setProfile((p) => {
+              const next = { ...p, ...updated };
+              if (currentUser) {
+                setDoc(doc(db, 'users', currentUser.uid), next, { merge: true }).catch(() => {});
+              }
+              return next;
+            });
+          }}
+          spots={spots}
+        />
+      </ErrorBoundary>
 
       {/* Journal / Spot List Drawer */}
       <SpotListDrawer
@@ -1098,22 +1209,24 @@ export default function App() {
       )}
 
       {/* Multiplayer Party & Auth Modal */}
-      <MultiplayerPartyModal
-        isOpen={isMultiplayerModalOpen}
-        onClose={() => setIsMultiplayerModalOpen(false)}
-        currentUser={currentUser}
-        currentParty={currentParty}
-        profile={profile}
-        spots={spots}
-        onLoginGoogle={handleLoginGoogle}
-        onCreateParty={handleCreateParty}
-        onJoinPartyByCode={handleJoinPartyByCode}
-        onLeaveParty={handleLeaveParty}
-        onOpenAddModal={() => {
-          setIsMultiplayerModalOpen(false);
-          setIsAddModalOpen(true);
-        }}
-      />
+      <ErrorBoundary key={isMultiplayerModalOpen ? 'open' : 'closed'} componentName="Kelola Squad" onClose={() => setIsMultiplayerModalOpen(false)}>
+        <MultiplayerPartyModal
+          isOpen={isMultiplayerModalOpen}
+          onClose={() => setIsMultiplayerModalOpen(false)}
+          currentUser={currentUser}
+          currentParty={currentParty}
+          profile={profile}
+          spots={spots}
+          onLoginGoogle={handleLoginGoogle}
+          onCreateParty={handleCreateParty}
+          onJoinPartyByCode={handleJoinPartyByCode}
+          onLeaveParty={handleLeaveParty}
+          onOpenAddModal={() => {
+            setIsMultiplayerModalOpen(false);
+            setIsAddModalOpen(true);
+          }}
+        />
+      </ErrorBoundary>
 
       {/* Level Up Celebratory Modal */}
       {levelUpInfo && (
