@@ -93,6 +93,7 @@ export default function App() {
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState<boolean>(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
+  const [editingSpot, setEditingSpot] = useState<BaksoSpot | null>(null);
   const [isJournalOpen, setIsJournalOpen] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isScanlinesOn, setIsScanlinesOn] = useState<boolean>(true);
@@ -114,6 +115,11 @@ export default function App() {
   const [mapCenter, setMapCenter] = useState<[number, number]>([-6.2088, 106.8456]);
   const [pendingCoords, setPendingCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [isAddingMode, setIsAddingMode] = useState<boolean>(false);
+  const isAddingModeRef = React.useRef(isAddingMode);
+
+  useEffect(() => {
+    isAddingModeRef.current = isAddingMode;
+  }, [isAddingMode]);
 
   // Firebase Auth Listener & User Sync
   useEffect(() => {
@@ -444,19 +450,29 @@ export default function App() {
     });
   };
 
-  // Save new spot
-  const handleSaveSpot = async (newSpotData: Omit<BaksoSpot, 'id' | 'createdAt'>) => {
-    const spotId = `spot-${Date.now()}`;
+  // Save new spot or update existing spot
+  const handleSaveSpot = async (spotData: Omit<BaksoSpot, 'id' | 'createdAt'> & { id?: string; createdAt?: number }) => {
+    const isEdit = Boolean(spotData.id);
+    const spotId = spotData.id || `spot-${Date.now()}`;
+    const createdAt = spotData.createdAt || Date.now();
+
     const newSpot: BaksoSpot = {
-      ...newSpotData,
+      ...spotData,
       id: spotId,
-      createdAt: Date.now(),
-      ownerId: currentUser?.uid || 'local',
-      partyId: currentParty?.id,
-      addedByName: profile.name,
+      createdAt,
+      ownerId: spotData.ownerId || currentUser?.uid || 'local',
+      partyId: spotData.partyId || currentParty?.id,
+      addedByName: spotData.addedByName || profile.name,
     };
 
-    setSpots((prev) => [newSpot, ...prev]);
+    setSpots((prev) => {
+      const exists = prev.some((s) => s.id === spotId);
+      if (exists) {
+        return prev.map((s) => (s.id === spotId ? newSpot : s));
+      }
+      return [newSpot, ...prev];
+    });
+
     setSelectedSpot(newSpot);
 
     if (isValidCoord(newSpot.lat, newSpot.lng)) {
@@ -465,23 +481,30 @@ export default function App() {
 
     setPendingCoords(null);
     setIsAddingMode(false);
+    setEditingSpot(null);
 
     // Save to Firestore Database using matching doc ID
     if (currentUser) {
       try {
-        await setDoc(doc(db, 'spots', spotId), {
-          ...newSpot,
-          ownerId: currentUser.uid,
-          partyId: currentParty?.id || null,
-          addedByName: profile.name,
-        });
+        await setDoc(
+          doc(db, 'spots', spotId),
+          {
+            ...newSpot,
+            ownerId: currentUser.uid,
+            partyId: currentParty?.id || null,
+            addedByName: profile.name,
+          },
+          { merge: true }
+        );
       } catch (err) {
         console.warn('Error saving spot to Firestore:', err);
       }
     }
 
-    // Award +100 XP
-    addXp(100);
+    if (!isEdit) {
+      // Award +100 XP only for newly added spots
+      addXp(100);
+    }
   };
 
   // Delete spot
@@ -509,7 +532,7 @@ export default function App() {
 
   // Handle Pick Location on Map
   const handleMapClickLocation = (lat: number, lng: number) => {
-    if (isAddingMode && isValidCoord(lat, lng)) {
+    if (isAddingModeRef.current && isValidCoord(lat, lng)) {
       setPendingCoords({ lat, lng });
       setIsAddingMode(false);
       setIsAddModalOpen(true);
@@ -662,6 +685,10 @@ export default function App() {
           }}
           onDeleteSpot={handleDeleteSpot}
           onMapClickLocation={handleMapClickLocation}
+          onCancelPickFromMap={() => {
+            setIsAddingMode(false);
+            setIsAddModalOpen(true);
+          }}
           isAddingMode={isAddingMode}
           pendingCoords={pendingCoords}
           center={mapCenter}
@@ -696,16 +723,18 @@ export default function App() {
         onResetData={handleResetData}
       />
 
-      {/* Log / Add New Spot Modal */}
+      {/* Log / Add / Edit Spot Modal */}
       <AddSpotModal
         isOpen={isAddModalOpen}
         onClose={() => {
           setIsAddModalOpen(false);
           setIsAddingMode(false);
+          setEditingSpot(null);
         }}
         onSaveSpot={handleSaveSpot}
         initialCoords={pendingCoords}
         onPickFromMap={handleStartPickFromMap}
+        editingSpot={editingSpot}
       />
 
       {/* "Lihat Detail Kunjungan" Modal */}
@@ -714,6 +743,11 @@ export default function App() {
         isOpen={isDetailModalOpen}
         onClose={() => setIsDetailModalOpen(false)}
         onDeleteSpot={handleDeleteSpot}
+        onEditSpot={(spot) => {
+          setEditingSpot(spot);
+          setIsDetailModalOpen(false);
+          setIsAddModalOpen(true);
+        }}
         onFlyToMap={(lat, lng) => {
           if (isValidCoord(lat, lng)) {
             setMapCenter([Number(lat), Number(lng)]);

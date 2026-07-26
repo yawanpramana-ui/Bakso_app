@@ -9,9 +9,10 @@ import { X, MapPin, Upload, Image as ImageIcon, Sparkles, AlertCircle, Navigatio
 interface AddSpotModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSaveSpot: (spot: Omit<BaksoSpot, 'id' | 'createdAt'>) => void;
+  onSaveSpot: (spot: Omit<BaksoSpot, 'id' | 'createdAt'> & { id?: string; createdAt?: number }) => void;
   initialCoords?: { lat: number; lng: number } | null;
   onPickFromMap: () => void;
+  editingSpot?: BaksoSpot | null;
 }
 
 // Preset photos if user wants quick sample photo or hasn't uploaded one
@@ -28,6 +29,7 @@ export const AddSpotModal: React.FC<AddSpotModalProps> = ({
   onSaveSpot,
   initialCoords,
   onPickFromMap,
+  editingSpot,
 }) => {
   if (!isOpen) return null;
 
@@ -58,13 +60,37 @@ export const AddSpotModal: React.FC<AddSpotModalProps> = ({
   const [isGeolocating, setIsGeolocating] = useState(false);
   const [gpsSuccessMsg, setGpsSuccessMsg] = useState('');
 
-  // Sync state if initialCoords changes
+  // Sync fields when editingSpot or initialCoords changes
   React.useEffect(() => {
-    if (initialCoords && isValidCoord(initialCoords.lat, initialCoords.lng)) {
+    if (!isOpen) return;
+
+    if (editingSpot) {
+      setName(editingSpot.name);
+      setAddress(editingSpot.address);
+      setRating(editingSpot.rating);
+      setExpression(editingSpot.characterExpression);
+      setFlavorRating(editingSpot.flavorRating);
+      setMeatballRating(editingSpot.meatballRating);
+      setSambalLevel(editingSpot.sambalLevel);
+      setPriceRange(editingSpot.priceRange);
+      setAtmosphere(editingSpot.atmosphere || 'Nyaman & Bersih');
+      setReview(editingSpot.review);
+      setPhotoUrl(editingSpot.photoUrl || PRESET_PHOTOS[0].url);
+      setTags(editingSpot.tags || ['Bakso Urat', 'Pedas']);
+
+      // If new coordinates were picked from map during edit mode, use them!
+      if (initialCoords && isValidCoord(initialCoords.lat, initialCoords.lng)) {
+        setLat(initialCoords.lat);
+        setLng(initialCoords.lng);
+      } else {
+        setLat(editingSpot.lat);
+        setLng(editingSpot.lng);
+      }
+    } else if (initialCoords && isValidCoord(initialCoords.lat, initialCoords.lng)) {
       setLat(initialCoords.lat);
       setLng(initialCoords.lng);
     }
-  }, [initialCoords]);
+  }, [editingSpot, initialCoords, isOpen]);
 
   // Handle GPS Location Detection
   const handleDetectGps = () => {
@@ -105,18 +131,47 @@ export const AddSpotModal: React.FC<AddSpotModalProps> = ({
     );
   };
 
-  // Handle Image Upload File
+  // Handle Image Upload File with Auto-Compression (Resizes to max 600px & JPEG 0.7)
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') {
-          setPhotoUrl(reader.result);
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_DIMENSION = 600;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_DIMENSION) {
+            height = Math.round((height * MAX_DIMENSION) / width);
+            width = MAX_DIMENSION;
+          }
+        } else {
+          if (height > MAX_DIMENSION) {
+            width = Math.round((width * MAX_DIMENSION) / height);
+            height = MAX_DIMENSION;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          // Compress to JPEG format with 0.7 quality (~30KB-50KB string size)
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+          setPhotoUrl(compressedBase64);
         }
       };
-      reader.readAsDataURL(file);
-    }
+      if (typeof event.target?.result === 'string') {
+        img.src = event.target.result;
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleAddTag = () => {
@@ -147,6 +202,7 @@ export const AddSpotModal: React.FC<AddSpotModalProps> = ({
     soundFx.playSuccess();
 
     onSaveSpot({
+      ...(editingSpot ? { id: editingSpot.id, createdAt: editingSpot.createdAt } : {}),
       name: name.trim(),
       address: address.trim(),
       lat: safeLat,
@@ -160,7 +216,7 @@ export const AddSpotModal: React.FC<AddSpotModalProps> = ({
       atmosphere,
       review: review.trim() || 'Bakso mantap dan menggugah selera!',
       photoUrl,
-      visitDate: new Date().toISOString().split('T')[0],
+      visitDate: editingSpot ? editingSpot.visitDate : new Date().toISOString().split('T')[0],
       tags,
     });
 
@@ -175,14 +231,16 @@ export const AddSpotModal: React.FC<AddSpotModalProps> = ({
         <div className="flex items-center justify-between border-b-2 border-amber-800/80 pb-3 mb-4">
           <div className="flex items-center gap-3">
             <span className="text-3xl p-2 bg-amber-950 border border-amber-600 rounded-xl shadow-md">
-              🍲
+              {editingSpot ? '✏️' : '🍲'}
             </span>
             <div>
               <h3 className="text-lg sm:text-xl font-pixel text-amber-300 tracking-tight">
-                CATAT SPOT BAKSO BARU
+                {editingSpot ? 'EDIT DETAIL KEDAI BAKSO' : 'CATAT SPOT BAKSO BARU'}
               </h3>
               <p className="text-xs font-arcade text-amber-200/70">
-                Lengkapi log petualangan bakso untuk mendapatkan XP & Badge!
+                {editingSpot
+                  ? 'Perbarui catatan rasa, rating, foto, dan lokasi kedai ini.'
+                  : 'Lengkapi log petualangan bakso untuk mendapatkan XP & Badge!'}
               </p>
             </div>
           </div>
@@ -551,7 +609,7 @@ export const AddSpotModal: React.FC<AddSpotModalProps> = ({
               className="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-amber-950 font-pixel font-bold text-xs rounded-xl border-2 border-amber-200 shadow-xl btn-retro flex items-center gap-2"
             >
               <Sparkles className="w-4 h-4" />
-              SIMPAN LOG BAKSO (+100 XP)
+              <span>{editingSpot ? 'SIMPAN PERUBAHAN BAKSO' : 'SIMPAN LOG BAKSO (+100 XP)'}</span>
             </button>
           </div>
         </form>

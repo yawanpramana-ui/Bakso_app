@@ -4,13 +4,14 @@ import { EXPRESSIONS } from '../data/expressions';
 import { CharacterAvatar } from './CharacterAvatar';
 import { BaksoRating } from './BaksoRating';
 import { soundFx } from '../utils/audio';
-import { X, MapPin, Calendar, Trash2, Award, Share2 } from 'lucide-react';
+import { X, MapPin, Calendar, Trash2, Award, Share2, Edit3 } from 'lucide-react';
 
 interface SpotDetailModalProps {
   spot: BaksoSpot | null;
   isOpen: boolean;
   onClose: () => void;
   onDeleteSpot?: (id: string) => void;
+  onEditSpot?: (spot: BaksoSpot) => void;
   onFlyToMap?: (lat: number, lng: number) => void;
 }
 
@@ -19,6 +20,7 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
   isOpen,
   onClose,
   onDeleteSpot,
+  onEditSpot,
   onFlyToMap,
 }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
@@ -213,40 +215,54 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
 
           {/* Footer Action Buttons */}
           <div className="flex items-center justify-between border-t border-amber-800/80 pt-4 mt-2">
-            {onDeleteSpot ? (
-              showDeleteConfirm ? (
-                <div className="flex items-center gap-2 bg-red-950 p-2 rounded-xl border-2 border-red-500 animate-fadeIn">
-                  <span className="text-xs text-red-200 font-pixel font-bold">Hapus Spot Ini?</span>
-                  <button
-                    onClick={() => {
-                      soundFx.playClick();
-                      onDeleteSpot(spot.id);
-                      setShowDeleteConfirm(false);
-                      onClose();
-                    }}
-                    className="px-2.5 py-1 bg-red-600 hover:bg-red-500 text-white font-pixel text-xs rounded-lg border border-white transition-all shadow"
-                  >
-                    Ya, Hapus
-                  </button>
-                  <button
-                    onClick={() => setShowDeleteConfirm(false)}
-                    className="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-amber-200 font-pixel text-xs rounded-lg transition-all"
-                  >
-                    Batal
-                  </button>
-                </div>
-              ) : (
+            <div className="flex items-center gap-2">
+              {onEditSpot && (
                 <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="px-3 py-2 bg-red-950/80 hover:bg-red-900 text-red-200 font-pixel text-xs rounded-xl border border-red-700 flex items-center gap-1.5 transition-colors"
+                  onClick={() => {
+                    soundFx.playClick();
+                    onClose();
+                    onEditSpot(spot);
+                  }}
+                  className="px-3 py-2 bg-amber-800 hover:bg-amber-700 text-amber-100 font-pixel text-xs rounded-xl border border-amber-500 flex items-center gap-1.5 transition-colors shadow"
                 >
-                  <Trash2 className="w-4 h-4" />
-                  Hapus Spot
+                  <Edit3 className="w-4 h-4 text-amber-300" />
+                  <span>Edit Spot</span>
                 </button>
-              )
-            ) : (
-              <div />
-            )}
+              )}
+
+              {onDeleteSpot ? (
+                showDeleteConfirm ? (
+                  <div className="flex items-center gap-2 bg-red-950 p-2 rounded-xl border-2 border-red-500 animate-fadeIn">
+                    <span className="text-xs text-red-200 font-pixel font-bold">Hapus Spot Ini?</span>
+                    <button
+                      onClick={() => {
+                        soundFx.playClick();
+                        onDeleteSpot(spot.id);
+                        setShowDeleteConfirm(false);
+                        onClose();
+                      }}
+                      className="px-2.5 py-1 bg-red-600 hover:bg-red-500 text-white font-pixel text-xs rounded-lg border border-white transition-all shadow"
+                    >
+                      Ya, Hapus
+                    </button>
+                    <button
+                      onClick={() => setShowDeleteConfirm(false)}
+                      className="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-amber-200 font-pixel text-xs rounded-lg transition-all"
+                    >
+                      Batal
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="px-3 py-2 bg-red-950/80 hover:bg-red-900 text-red-200 font-pixel text-xs rounded-xl border border-red-700 flex items-center gap-1.5 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Hapus</span>
+                  </button>
+                )
+              ) : null}
+            </div>
 
             <div className="flex items-center gap-2 relative">
               {copiedToast && (

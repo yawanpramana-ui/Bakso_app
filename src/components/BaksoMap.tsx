@@ -11,6 +11,7 @@ interface BaksoMapProps {
   onViewSpotDetail: (spot: BaksoSpot) => void;
   onDeleteSpot?: (id: string) => void;
   onMapClickLocation?: (lat: number, lng: number) => void;
+  onCancelPickFromMap?: () => void;
   isAddingMode?: boolean;
   pendingCoords?: { lat: number; lng: number } | null;
   center?: [number, number];
@@ -24,6 +25,7 @@ export const BaksoMap: React.FC<BaksoMapProps> = ({
   onViewSpotDetail,
   onDeleteSpot,
   onMapClickLocation,
+  onCancelPickFromMap,
   isAddingMode = false,
   pendingCoords,
   center = [-6.2088, 106.8456], // Default Jakarta
@@ -33,6 +35,11 @@ export const BaksoMap: React.FC<BaksoMapProps> = ({
   const mapRef = useRef<L.Map | null>(null);
   const markersGroupRef = useRef<L.LayerGroup | null>(null);
   const pendingMarkerRef = useRef<L.Marker | null>(null);
+
+  const onMapClickLocationRef = useRef(onMapClickLocation);
+  useEffect(() => {
+    onMapClickLocationRef.current = onMapClickLocation;
+  }, [onMapClickLocation]);
 
   // Helper to create HTML DivIcon for Character Head Map Markers
   const createCharacterHeadIcon = (expression: ExpressionId, rating: number, isSelected: boolean) => {
@@ -155,9 +162,9 @@ export const BaksoMap: React.FC<BaksoMapProps> = ({
 
         // Click event on map
         map.on('click', (e: L.LeafletMouseEvent) => {
-          if (onMapClickLocation && e && e.latlng && isValidCoord(e.latlng.lat, e.latlng.lng)) {
+          if (onMapClickLocationRef.current && e && e.latlng && isValidCoord(e.latlng.lat, e.latlng.lng)) {
             soundFx.playClick();
-            onMapClickLocation(Number(e.latlng.lat), Number(e.latlng.lng));
+            onMapClickLocationRef.current(Number(e.latlng.lat), Number(e.latlng.lng));
           }
         });
       } catch {
@@ -355,17 +362,34 @@ export const BaksoMap: React.FC<BaksoMapProps> = ({
   }, [spots, selectedSpot, pendingCoords]);
 
   return (
-    <div className="relative w-full h-full overflow-hidden">
+    <div className={`relative w-full h-full overflow-hidden ${isAddingMode ? 'cursor-crosshair' : ''}`}>
       {/* Leaflet Canvas Container */}
       <div ref={mapContainerRef} className="w-full h-full z-0" />
 
       {/* Map Interactive HUD Banner overlay when adding location */}
       {isAddingMode && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-[#800000] text-[#ffd700] border-3 border-[#ffd700] px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl shadow-[4px_4px_0px_#2d1b15] flex items-center gap-2 sm:gap-3 animate-pulse max-w-[90vw] text-center">
-          <span className="text-lg sm:text-xl shrink-0">📍</span>
-          <p className="text-[10px] sm:text-xs font-pixel leading-tight break-words">
-            KLIK PADA PETA UNTUK MENENTUKAN LOKASI KEDAI BAKSO!
-          </p>
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-[#800000] text-[#ffd700] border-3 border-[#ffd700] px-3 py-2 sm:px-5 sm:py-2.5 rounded-xl shadow-[4px_4px_0px_#2d1b15] flex items-center gap-3 animate-pulse max-w-[90vw]">
+          <span className="text-xl shrink-0">🎯</span>
+          <div className="text-left">
+            <p className="text-[11px] sm:text-xs font-pixel leading-tight font-bold">
+              KLIK LOKASI MANA SAJA DI PETA!
+            </p>
+            <p className="text-[9px] font-arcade text-amber-200">
+              Titik yang Anda pilih akan menjadi lokasi kedai bakso.
+            </p>
+          </div>
+          {onCancelPickFromMap && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                soundFx.playClick();
+                onCancelPickFromMap();
+              }}
+              className="px-2.5 py-1 bg-amber-950 hover:bg-amber-900 border border-amber-500 rounded-lg text-[10px] font-pixel text-amber-200 shrink-0 ml-1 active:scale-95"
+            >
+              ❌ Batal
+            </button>
+          )}
         </div>
       )}
     </div>
