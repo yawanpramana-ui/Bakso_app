@@ -294,9 +294,10 @@ export const HomeScreenModal: React.FC<HomeScreenModalProps> = ({
                   <button
                     onClick={() => {
                       soundFx.playClick();
+                      onClose();
                       onOpenProfile();
                     }}
-                    className="text-[10px] bg-amber-950 hover:bg-amber-900 text-amber-300 border border-amber-700 px-2.5 py-1 rounded-lg"
+                    className="text-[10px] bg-amber-950 hover:bg-amber-900 text-amber-300 border border-amber-700 px-2.5 py-1 rounded-lg cursor-pointer active:scale-95 transition-all"
                   >
                     Edit Profil 👤
                   </button>

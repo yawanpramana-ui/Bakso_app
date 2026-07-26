@@ -577,11 +577,35 @@ export default function App() {
 
   // Handle Data Reset
   const handleResetData = () => {
+    const defaultProfile: HunterProfile = {
+      name: currentUser?.displayName || 'Hunter Pentol Baru',
+      title: 'Petualang Pentol Pemula',
+      avatarExpression: 'star',
+      level: 1,
+      xp: 0,
+      nextLevelXp: 100,
+      favoriteType: 'Bakso Urat Jumbo',
+    };
+
     setSpots([]);
+    setProfile(defaultProfile);
     localStorage.removeItem(STORAGE_KEY_SPOTS);
     localStorage.removeItem(STORAGE_KEY_PROFILE);
     setMapCenter([-6.2088, 106.8456]);
     setSelectedSpot(null);
+
+    if (currentUser) {
+      setDoc(
+        doc(db, 'users', currentUser.uid),
+        {
+          name: defaultProfile.name,
+          level: 1,
+          xp: 0,
+          title: defaultProfile.title,
+        },
+        { merge: true }
+      ).catch(() => {});
+    }
   };
 
   return (
