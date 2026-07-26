@@ -93,6 +93,8 @@ export const AddSpotModal: React.FC<AddSpotModalProps> = ({
     } else if (initialCoords && isValidCoord(initialCoords.lat, initialCoords.lng)) {
       setLat(initialCoords.lat);
       setLng(initialCoords.lng);
+      // Map picks are NOT GPS, reset isGpsLocated to false
+      setIsGpsLocated(false);
     }
   }, [editingSpot, initialCoords, isOpen]);
 
@@ -115,6 +117,7 @@ export const AddSpotModal: React.FC<AddSpotModalProps> = ({
         if (isValidCoord(userLat, userLng)) {
           setLat(userLat);
           setLng(userLng);
+          setIsGpsLocated(true);
           setIsGeolocating(false);
           setGpsSuccessMsg(`GPS Berhasil! Koordinat terdeteksi (${userLat.toFixed(4)}, ${userLng.toFixed(4)})`);
           soundFx.playSuccess();

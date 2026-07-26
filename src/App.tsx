@@ -647,12 +647,19 @@ export default function App() {
   // Add XP and handle Level Up
   const addXp = (amount: number) => {
     setProfile((prev) => {
-      let newXp = prev.xp + amount;
-      let newLevel = prev.level;
-      let nextXp = prev.nextLevelXp;
+      const currentLevel = typeof prev?.level === 'number' && !isNaN(prev.level) && prev.level > 0 ? prev.level : 1;
+      const currentXp = typeof prev?.xp === 'number' && !isNaN(prev.xp) ? prev.xp : 0;
+      const currentNextXp =
+        typeof prev?.nextLevelXp === 'number' && !isNaN(prev.nextLevelXp) && prev.nextLevelXp > 0
+          ? prev.nextLevelXp
+          : currentLevel * 100 + 200;
+
+      let newXp = currentXp + (typeof amount === 'number' && !isNaN(amount) ? amount : 100);
+      let newLevel = currentLevel;
+      let nextXp = currentNextXp;
       let leveledUp = false;
 
-      if (newXp >= nextXp) {
+      while (newXp >= nextXp) {
         newLevel += 1;
         nextXp += 300;
         leveledUp = true;
@@ -681,6 +688,7 @@ export default function App() {
           {
             level: updated.level,
             xp: updated.xp,
+            nextLevelXp: updated.nextLevelXp,
             title: updated.title,
           },
           { merge: true }
@@ -746,7 +754,7 @@ export default function App() {
     }
 
     if (!isEdit && isGps) {
-      // Award +100 XP only for new spots added via authentic GPS location
+      // Award +100 XP ONLY for new spots added via authentic GPS location
       addXp(100);
     }
   };
@@ -1057,19 +1065,21 @@ export default function App() {
       />
 
       {/* Log / Add / Edit Spot Modal */}
-      <AddSpotModal
-        isOpen={isAddModalOpen}
-        onClose={() => {
-          setIsAddModalOpen(false);
-          setIsAddingMode(false);
-          setEditingSpot(null);
-        }}
-        onSaveSpot={handleSaveSpot}
-        initialCoords={pendingCoords}
-        onPickFromMap={handleStartPickFromMap}
-        editingSpot={editingSpot}
-        existingSpots={spots}
-      />
+      <ErrorBoundary key={isAddModalOpen ? 'open' : 'closed'} componentName="Tambah Tempat Bakso" onClose={() => setIsAddModalOpen(false)}>
+        <AddSpotModal
+          isOpen={isAddModalOpen}
+          onClose={() => {
+            setIsAddModalOpen(false);
+            setIsAddingMode(false);
+            setEditingSpot(null);
+          }}
+          onSaveSpot={handleSaveSpot}
+          initialCoords={pendingCoords}
+          onPickFromMap={handleStartPickFromMap}
+          editingSpot={editingSpot}
+          existingSpots={spots}
+        />
+      </ErrorBoundary>
 
       {/* "Lihat Detail Kunjungan" Modal */}
       <SpotDetailModal
@@ -1230,15 +1240,17 @@ export default function App() {
 
       {/* Level Up Celebratory Modal */}
       {levelUpInfo && (
-        <LevelUpModal
-          isOpen={!!levelUpInfo}
-          onClose={() => setLevelUpInfo(null)}
-          newLevel={levelUpInfo.newLevel}
-          newTitle={levelUpInfo.newTitle}
-          profileName={profile.name}
-          avatarExpression={profile.avatarExpression}
-          onOpenProfile={() => setIsProfileModalOpen(true)}
-        />
+        <ErrorBoundary componentName="Level Up Modal" onClose={() => setLevelUpInfo(null)}>
+          <LevelUpModal
+            isOpen={!!levelUpInfo}
+            onClose={() => setLevelUpInfo(null)}
+            newLevel={levelUpInfo.newLevel}
+            newTitle={levelUpInfo.newTitle}
+            profileName={profile?.name || 'Hunter'}
+            avatarExpression={profile?.avatarExpression || 'happy'}
+            onOpenProfile={() => setIsProfileModalOpen(true)}
+          />
+        </ErrorBoundary>
       )}
     </div>
   );
