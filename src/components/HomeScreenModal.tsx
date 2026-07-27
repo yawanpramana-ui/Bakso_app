@@ -126,15 +126,15 @@ export const HomeScreenModal: React.FC<HomeScreenModalProps> = ({
         {/* Hero banner */}
         <div style={{ background:'linear-gradient(135deg, #800000, #521319, #25101a)', border:'4px solid #ffd700', padding:'20px 24px', borderRadius:24, position:'relative', overflow:'hidden', marginBottom:16, boxShadow:'0 0 50px rgba(255,215,0,0.2)' }}>
           <span style={{ position:'absolute', right:-20, bottom:-20, fontSize:100, opacity:0.1, pointerEvents:'none' }}>🍜</span>
-          {/* Character parade */}
-          <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-around', background:'rgba(0,0,0,0.4)', padding:'10px 16px', borderRadius:16, border:'1px solid rgba(146,64,14,0.5)', marginBottom:16 }}>
+          {/* Character parade — scrollable on mobile */}
+          <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-around', background:'rgba(0,0,0,0.4)', padding:'8px 12px', borderRadius:16, border:'1px solid rgba(146,64,14,0.5)', marginBottom:16, overflowX:'auto', gap:12 }}>
             {([
               { expr:'happy' as ExpressionId, label:'"Kuah Gurih!"', bg:'#052e16', col:'#6ee7b7', bd:'#16a34a' },
               { expr:'spicy' as ExpressionId, label:'"Sambal Setan!"', bg:'#450a0a', col:'#fca5a5', bd:'#dc2626' },
               { expr:'star' as ExpressionId, label:'"Bintang 5!"', bg:'#451a03', col:'#fcd34d', bd:'#ffd700' },
               { expr:'cool' as ExpressionId, label:'"Squad Ready!"', bg:'#082f49', col:'#7dd3fc', bd:'#0284c7' },
             ]).map(({ expr, label, bg, col, bd }) => (
-              <div key={expr} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
+              <div key={expr} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, flexShrink:0 }}>
                 <span style={{ background:bg, color:col, fontSize:8, padding:'2px 6px', borderRadius:6, border:`1px solid ${bd}`, fontWeight:700, whiteSpace:'nowrap' }}>💬 {label}</span>
                 <CharacterAvatar expression={expr} size="md" />
               </div>
@@ -176,7 +176,7 @@ export const HomeScreenModal: React.FC<HomeScreenModalProps> = ({
                 <LogIn style={{ width:13, height:13 }} /> MASUK GOOGLE
               </button>
             ) : (
-              <button onClick={() => { soundFx.playClick(); onOpenMultiplayer(); }}
+              <button onClick={() => { soundFx.playClick(); onClose(); onOpenMultiplayer(); }}
                 style={{ padding:'7px 16px', background:'#052e16', color:'#6ee7b7', borderRadius:10, fontSize:10, fontWeight:700, border:'1px solid #16a34a', cursor:'pointer', display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
                 <UserCheck style={{ width:13, height:13 }} /> Kelola Akun / Squad
               </button>

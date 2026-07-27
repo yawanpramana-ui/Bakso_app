@@ -200,16 +200,16 @@ export const SpotListDrawer: React.FC<SpotListDrawerProps> = ({
                 </div>
 
                 {/* Bottom Action Footer inside card */}
-                <div className="mt-2.5 pt-2 border-t border-amber-900/60 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 text-[10px] text-amber-300/80 shrink-0 flex-wrap">
-                    <span className="text-amber-200 font-pixel font-bold">👤 {spot.addedByName || 'Hunter'}</span>
-                    <span>•</span>
-                    <span>Harga: {spot.priceRange}</span>
-                    <span>•</span>
-                    <span>Pedas: {spot.sambalLevel}🌶️</span>
+                <div className="mt-2.5 pt-2 border-t border-amber-900/60 flex flex-wrap items-center justify-between gap-1.5">
+                  <div className="flex items-center gap-1 text-[10px] text-amber-300/80 flex-wrap min-w-0 flex-1">
+                    <span className="text-amber-200 font-pixel font-bold truncate max-w-[100px]">👤 {spot.addedByName || 'Hunter'}</span>
+                    <span className="text-amber-500">•</span>
+                    <span className="whitespace-nowrap">{spot.priceRange}</span>
+                    <span className="text-amber-500">•</span>
+                    <span className="whitespace-nowrap">{spot.sambalLevel}🌶️</span>
                   </div>
 
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center gap-1.5 shrink-0 ml-auto">
                     {onDeleteSpot && (
                       deletingSpotId === spot.id ? (
                         <div className="flex items-center gap-1 bg-red-950 p-1 rounded-lg border border-red-500">
@@ -256,7 +256,7 @@ export const SpotListDrawer: React.FC<SpotListDrawerProps> = ({
                         soundFx.playClick();
                         onViewSpotDetail(spot);
                       }}
-                      className="px-2.5 py-1 bg-amber-700 hover:bg-amber-600 text-amber-950 font-bold font-pixel text-[9px] rounded border border-amber-300 transition-all flex items-center gap-1"
+                      className="px-2 py-1 bg-amber-700 hover:bg-amber-600 text-amber-950 font-bold font-pixel text-[9px] rounded border border-amber-300 transition-all flex items-center gap-0.5 whitespace-nowrap"
                     >
                       Detail <ChevronRight className="w-3 h-3" />
                     </button>

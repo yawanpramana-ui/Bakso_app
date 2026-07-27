@@ -384,8 +384,8 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
                   </span>
                 )}
               </div>
-              <p className="text-[10px] text-amber-400/80 mt-0.5 break-all sm:break-words">
-                {currentUser?.email || 'Progress tersimpan di cloud database secara otomatis.'}
+              <p className="text-[10px] text-amber-400/80 mt-0.5 break-words">
+                {currentUser?.email || 'Progress tersimpan di cloud otomatis.'}
               </p>
             </div>
           </div>

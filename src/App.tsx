@@ -577,24 +577,39 @@ export default function App() {
   const handleLeaveParty = async () => {
     if (!currentUser || !currentParty) return;
     const partyId = currentParty.id;
-    const remainingMembers = (currentParty.memberIds || []).filter((uid) => uid !== currentUser.uid);
+    const myUid = currentUser.uid;
 
     try {
-      // 1. Clear active party ID from user document
-      await setDoc(doc(db, 'users', currentUser.uid), { currentPartyId: null }, { merge: true });
+      // 1. Clear active party ID from user document immediately
+      await setDoc(doc(db, 'users', myUid), { currentPartyId: null }, { merge: true });
 
-      // 2. Auto Cleanup: If NO members left, delete the empty party document from Firestore
+      // 2. Read fresh party data from Firestore to avoid stale memberIds
+      const freshPartySnap = await getDoc(doc(db, 'parties', partyId));
+      if (!freshPartySnap.exists()) {
+        // Party already deleted — nothing to do
+        setCurrentParty(null);
+        return;
+      }
+
+      const freshPartyData = freshPartySnap.data();
+      const freshMemberIds: string[] = freshPartyData.memberIds || [];
+      const remainingMembers = freshMemberIds.filter((uid) => uid !== myUid);
+
+      // 3. Auto Cleanup: If NO members left, delete the empty party document
       if (remainingMembers.length === 0) {
         await deleteDoc(doc(db, 'parties', partyId));
       } else {
-        // Otherwise remove user from memberIds list
+        // Remove user from memberIds AND memberNames
         const updates: Record<string, any> = {
-          memberIds: arrayRemove(currentUser.uid),
+          memberIds: arrayRemove(myUid),
+          [`memberNames.${myUid}`]: null, // delete from map
         };
+
         // Auto Ownership Transfer: If Leader left, assign leader role to next remaining member
-        if (currentParty.ownerId === currentUser.uid && remainingMembers.length > 0) {
+        if (freshPartyData.ownerId === myUid && remainingMembers.length > 0) {
           updates.ownerId = remainingMembers[0];
         }
+
         await updateDoc(doc(db, 'parties', partyId), updates);
       }
     } catch (err) {
@@ -1168,7 +1183,7 @@ export default function App() {
           spots={spots}
           currentUser={currentUser}
           onLoginGoogle={handleLoginGoogle}
-          onOpenMultiplayer={() => setIsMultiplayerModalOpen(true)}
+          onOpenMultiplayer={() => { setIsHomeScreenOpen(false); setIsMultiplayerModalOpen(true); }}
           onOpenAddSpot={() => {
             setPendingCoords(null);
             setIsAddModalOpen(true);

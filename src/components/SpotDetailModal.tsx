@@ -218,8 +218,9 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
           )}
 
           {/* Footer Action Buttons */}
-          <div className="flex items-center justify-between border-t border-amber-800/80 pt-4 mt-2">
-            <div className="flex items-center gap-2">
+          <div className="border-t border-amber-800/80 pt-3 mt-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            {/* Left: Edit + Delete */}
+            <div className="flex items-center gap-2 flex-wrap">
               {onEditSpot && (
                 <button
                   onClick={() => {
@@ -227,7 +228,7 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
                     onClose();
                     onEditSpot(spot);
                   }}
-                  className="px-3 py-2 bg-amber-800 hover:bg-amber-700 text-amber-100 font-pixel text-xs rounded-xl border border-amber-500 flex items-center gap-1.5 transition-colors shadow"
+                  className="px-3 py-2 bg-amber-800 hover:bg-amber-700 text-amber-100 font-pixel text-xs rounded-xl border border-amber-500 flex items-center gap-1.5 transition-colors shadow whitespace-nowrap"
                 >
                   <Edit3 className="w-4 h-4 text-amber-300" />
                   <span>Edit Spot</span>
@@ -236,8 +237,8 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
 
               {onDeleteSpot ? (
                 showDeleteConfirm ? (
-                  <div className="flex items-center gap-2 bg-red-950 p-2 rounded-xl border-2 border-red-500 animate-fadeIn">
-                    <span className="text-xs text-red-200 font-pixel font-bold">Hapus Spot Ini?</span>
+                  <div className="flex items-center gap-2 bg-red-950 p-2 rounded-xl border-2 border-red-500 animate-fadeIn flex-wrap">
+                    <span className="text-xs text-red-200 font-pixel font-bold whitespace-nowrap">Hapus Spot Ini?</span>
                     <button
                       onClick={() => {
                         soundFx.playClick();
@@ -245,13 +246,13 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
                         setShowDeleteConfirm(false);
                         onClose();
                       }}
-                      className="px-2.5 py-1 bg-red-600 hover:bg-red-500 text-white font-pixel text-xs rounded-lg border border-white transition-all shadow"
+                      className="px-2.5 py-1 bg-red-600 hover:bg-red-500 text-white font-pixel text-xs rounded-lg border border-white transition-all shadow whitespace-nowrap"
                     >
                       Ya, Hapus
                     </button>
                     <button
                       onClick={() => setShowDeleteConfirm(false)}
-                      className="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-amber-200 font-pixel text-xs rounded-lg transition-all"
+                      className="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-amber-200 font-pixel text-xs rounded-lg transition-all whitespace-nowrap"
                     >
                       Batal
                     </button>
@@ -259,7 +260,7 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
                 ) : (
                   <button
                     onClick={() => setShowDeleteConfirm(true)}
-                    className="px-3 py-2 bg-red-950/80 hover:bg-red-900 text-red-200 font-pixel text-xs rounded-xl border border-red-700 flex items-center gap-1.5 transition-colors"
+                    className="px-3 py-2 bg-red-950/80 hover:bg-red-900 text-red-200 font-pixel text-xs rounded-xl border border-red-700 flex items-center gap-1.5 transition-colors whitespace-nowrap"
                   >
                     <Trash2 className="w-4 h-4" />
                     <span>Hapus</span>
@@ -268,25 +269,27 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
               ) : null}
             </div>
 
-            <div className="flex items-center gap-2 relative">
+            {/* Right: Share + Close */}
+            <div className="flex items-center gap-2 relative flex-wrap">
               {copiedToast && (
-                <span className="absolute -top-8 right-0 bg-amber-400 text-amber-950 text-[10px] font-pixel font-bold px-2 py-1 rounded shadow border border-amber-200 animate-bounce">
+                <span className="absolute -top-8 right-0 bg-amber-400 text-amber-950 text-[10px] font-pixel font-bold px-2 py-1 rounded shadow border border-amber-200 animate-bounce whitespace-nowrap">
                   ✨ Berhasil Disalin!
                 </span>
               )}
               <button
                 onClick={handleShare}
-                className="px-4 py-2.5 bg-amber-800 hover:bg-amber-700 text-amber-100 font-pixel text-xs rounded-xl border border-amber-500 flex items-center gap-2 transition-all active:translate-y-0.5"
+                className="px-3 py-2 bg-amber-800 hover:bg-amber-700 text-amber-100 font-pixel text-xs rounded-xl border border-amber-500 flex items-center gap-1.5 transition-all active:translate-y-0.5 whitespace-nowrap"
               >
                 <Share2 className="w-4 h-4" />
-                Bagikan Review
+                <span className="hidden sm:inline">Bagikan</span>
+                <span className="sm:hidden">Share</span>
               </button>
               <button
                 onClick={() => {
                   soundFx.playClick();
                   onClose();
                 }}
-                className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-amber-950 font-pixel font-bold text-xs rounded-xl border-2 border-amber-200 shadow-md active:translate-y-0.5"
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-amber-950 font-pixel font-bold text-xs rounded-xl border-2 border-amber-200 shadow-md active:translate-y-0.5 whitespace-nowrap"
               >
                 TUTUP
               </button>
