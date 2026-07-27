@@ -344,11 +344,12 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
               ⚔️
             </div>
             <div>
-              <h2 className="text-sm sm:text-base text-[#ffd700] font-bold flex items-center gap-2">
-                <span>SQUAD MULTIPLAYER & RANKING</span>
-                <Sparkles className="w-4 h-4 text-amber-300" />
+              <h2 className="text-sm sm:text-base text-[#ffd700] font-bold flex items-center gap-1.5">
+                <span className="hidden sm:inline">SQUAD MULTIPLAYER & RANKING</span>
+                <span className="sm:hidden">SQUAD & RANKING</span>
+                <Sparkles className="w-4 h-4 text-amber-300 shrink-0" />
               </h2>
-              <p className="text-[10px] text-amber-300/80">
+              <p className="text-[10px] text-amber-300/80 hidden sm:block">
                 Berbagi Lokasi Bakso & Adu Peringkat Pemburu Terbaik!
               </p>
             </div>
@@ -467,7 +468,8 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
                 }`}
               >
                 <Trophy className="w-3.5 h-3.5 text-[#ffd700] shrink-0" />
-                <span>🏆 PERINGKAT</span>
+                <span className="hidden sm:inline">🏆 PERINGKAT</span>
+                <span className="sm:hidden">🏆</span>
               </button>
 
               <button
@@ -475,14 +477,15 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
                   soundFx.playClick();
                   setActiveTab('members');
                 }}
-                className={`flex-1 py-2 px-2 rounded-lg text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                className={`flex-1 py-2 px-1 sm:px-2 rounded-lg text-[10px] sm:text-xs font-bold flex items-center justify-center gap-1 transition-all ${
                   activeTab === 'members'
                     ? 'bg-[#800000] text-[#ffd700] border border-[#ffd700] shadow-md'
                     : 'text-amber-300 hover:text-amber-100 hover:bg-amber-950/50'
                 }`}
               >
                 <Users className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span>👥 ANGGOTA ({currentParty.memberIds.length})</span>
+                <span className="hidden sm:inline">👥 ANGGOTA ({currentParty.memberIds.length})</span>
+                <span className="sm:hidden">👥 ({currentParty.memberIds.length})</span>
               </button>
 
               <button
@@ -490,14 +493,15 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
                   soundFx.playClick();
                   setActiveTab('chat');
                 }}
-                className={`flex-1 py-2 px-2 rounded-lg text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1.5 transition-all relative ${
+                className={`flex-1 py-2 px-1 sm:px-2 rounded-lg text-[10px] sm:text-xs font-bold flex items-center justify-center gap-1 transition-all relative ${
                   activeTab === 'chat'
                     ? 'bg-[#800000] text-[#ffd700] border border-[#ffd700] shadow-md'
                     : 'text-amber-300 hover:text-amber-100 hover:bg-amber-950/50'
                 }`}
               >
                 <MessageSquare className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-                <span>💬 CHAT SQUAD</span>
+                <span className="hidden sm:inline">💬 CHAT SQUAD</span>
+                <span className="sm:hidden">💬 Chat</span>
               </button>
             </div>
 
@@ -505,15 +509,15 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
             {activeTab === 'ranking' && (
               <div className="space-y-4 animate-fade-in">
                 {/* Ranking Top Banner */}
-                <div className="bg-gradient-to-r from-amber-950/80 via-[#2d1b15] to-amber-950/80 p-3.5 rounded-xl border border-amber-600/80 flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <Crown className="w-5 h-5 text-[#ffd700] animate-bounce" />
-                    <div>
-                      <span className="text-[#ffd700] font-bold block text-xs">
-                        LEADERBOARD PEMBURU BAKSO SQUAD
+                <div className="bg-gradient-to-r from-amber-950/80 via-[#2d1b15] to-amber-950/80 p-2.5 sm:p-3 rounded-xl border border-amber-600/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <Crown className="w-4 h-4 text-[#ffd700] animate-bounce shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[#ffd700] font-bold block text-[11px] sm:text-xs truncate">
+                        LEADERBOARD SQUAD
                       </span>
-                      <p className="text-[10px] text-amber-200/80">
-                        Peringkat dihitung dari Level, XP, dan Jumlah Spot Bakso yang dibagikan.
+                      <p className="text-[9px] sm:text-[10px] text-amber-200/80 hidden sm:block truncate">
+                        Peringkat: Level + XP + Jumlah Spot.
                       </p>
                     </div>
                   </div>
@@ -524,9 +528,9 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
                         soundFx.playClick();
                         onOpenAddModal();
                       }}
-                      className="px-3 py-1.5 bg-emerald-800 hover:bg-emerald-700 text-white border border-emerald-400 rounded-xl text-[11px] font-bold flex items-center gap-1 shadow active:scale-95 shrink-0"
+                      className="px-2.5 py-1.5 bg-emerald-800 hover:bg-emerald-700 text-white border border-emerald-400 rounded-xl text-[10px] font-bold flex items-center gap-1 shadow active:scale-95 shrink-0 whitespace-nowrap"
                     >
-                      <Plus className="w-3.5 h-3.5" />
+                      <Plus className="w-3 h-3" />
                       <span>+ Spot (+100 XP)</span>
                     </button>
                   )}
@@ -614,7 +618,7 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
                       return (
                         <div
                           key={member.uid}
-                          className={`p-3 rounded-xl border flex items-center justify-between text-xs transition-all ${
+                          className={`p-2.5 sm:p-3 rounded-xl border flex items-center gap-2 text-xs transition-all ${
                             member.isMe
                               ? 'bg-[#3b281c] border-[#ffd700] ring-2 ring-[#ffd700]/50 shadow-md'
                               : isTop3
@@ -622,52 +626,48 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
                               : 'bg-[#181320] border-amber-900/60'
                           }`}
                         >
-                          {/* Rank & Name */}
-                          <div className="flex items-center gap-3">
-                            <span
-                              className={`w-7 h-7 rounded-lg border flex items-center justify-center font-bold text-xs shrink-0 ${
-                                member.rank === 1
-                                  ? 'bg-[#ffd700] text-black border-[#ffd700]'
-                                  : member.rank === 2
-                                  ? 'bg-slate-300 text-black border-slate-300'
-                                  : member.rank === 3
-                                  ? 'bg-amber-700 text-amber-100 border-amber-700'
-                                  : 'bg-amber-950 text-amber-300 border-amber-800'
-                              }`}
-                            >
-                              {medalEmoji}
-                            </span>
+                          {/* Rank badge */}
+                          <span
+                            className={`w-6 h-6 sm:w-7 sm:h-7 rounded-lg border flex items-center justify-center font-bold text-[10px] sm:text-xs shrink-0 ${
+                              member.rank === 1
+                                ? 'bg-[#ffd700] text-black border-[#ffd700]'
+                                : member.rank === 2
+                                ? 'bg-slate-300 text-black border-slate-300'
+                                : member.rank === 3
+                                ? 'bg-amber-700 text-amber-100 border-amber-700'
+                                : 'bg-amber-950 text-amber-300 border-amber-800'
+                            }`}
+                          >
+                            {medalEmoji}
+                          </span>
 
-                            <div>
-                              <div className="flex items-center gap-1.5 font-bold">
-                                <span className={member.isMe ? 'text-[#ffd700]' : 'text-amber-100'}>
-                                  {member.name}
+                          {/* Name + meta — flex-1 with min-w-0 for truncation */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1 font-bold flex-wrap">
+                              <span className={`truncate max-w-[100px] sm:max-w-none ${member.isMe ? 'text-[#ffd700]' : 'text-amber-100'}`}>
+                                {member.name}
+                              </span>
+                              {member.isMe && (
+                                <span className="text-[8px] bg-amber-950 text-amber-300 border border-amber-600 px-1 py-0.5 rounded font-normal shrink-0 whitespace-nowrap">
+                                  Anda
                                 </span>
-                                {member.isMe && (
-                                  <span className="text-[9px] bg-amber-950 text-amber-300 border border-amber-600 px-1.5 py-0.2 rounded font-normal">
-                                    Anda
-                                  </span>
-                                )}
-                                {member.isOwner && (
-                                  <span className="text-[9px] bg-[#800000] text-[#ffd700] border border-[#ffd700] px-1.5 py-0.2 rounded">
-                                    Leader 👑
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2 text-[10px] text-amber-400/80 mt-0.5">
-                                <span className="text-amber-300 font-bold">Level {member.level}</span>
-                                <span>•</span>
-                                <span>{member.xp} XP</span>
-                              </div>
+                              )}
+                              {member.isOwner && (
+                                <span className="text-[8px] bg-[#800000] text-[#ffd700] border border-[#ffd700] px-1 py-0.5 rounded shrink-0 whitespace-nowrap">
+                                  👑
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 text-[9px] text-amber-400/80 mt-0.5">
+                              <span className="text-amber-300 font-bold">Lv.{member.level}</span>
+                              <span>·</span>
+                              <span className="whitespace-nowrap">{member.xp} XP</span>
                             </div>
                           </div>
 
-                          {/* Stats Badge */}
-                          <div className="flex items-center gap-2 text-right">
-                            <div className="bg-[#181320] px-2.5 py-1 rounded-lg border border-amber-800 text-[11px] text-amber-200">
-                              <span className="font-bold text-[#ffd700]">📍 {member.spotsCount}</span>
-                              <span className="text-[9px] text-amber-400 ml-1">Spot</span>
-                            </div>
+                          {/* Stats Badge — always visible, compact */}
+                          <div className="bg-[#181320] px-2 py-1 rounded-lg border border-amber-800 text-[10px] text-amber-200 shrink-0 whitespace-nowrap">
+                            <span className="font-bold text-[#ffd700]">📍{member.spotsCount}</span>
                           </div>
                         </div>
                       );
@@ -729,18 +729,16 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
                       return (
                         <div
                           key={memberId}
-                          className="p-2.5 bg-[#181320] rounded-xl border border-amber-900/80 flex items-center justify-between text-xs"
+                          className="p-2.5 bg-[#181320] rounded-xl border border-amber-900/80 flex items-center gap-2 text-xs"
                         >
-                          <div className="flex items-center gap-2">
-                            <span className="w-6 h-6 rounded-full bg-amber-950 border border-amber-700 flex items-center justify-center text-[10px] font-bold text-amber-300">
-                              {idx + 1}
-                            </span>
-                            <span className="text-amber-100 font-bold">
-                              {name} {isMe && '(Anda)'}
-                            </span>
-                          </div>
+                          <span className="w-6 h-6 rounded-full bg-amber-950 border border-amber-700 flex items-center justify-center text-[10px] font-bold text-amber-300 shrink-0">
+                            {idx + 1}
+                          </span>
+                          <span className="text-amber-100 font-bold flex-1 min-w-0 truncate">
+                            {name} {isMe && '(Anda)'}
+                          </span>
                           {isOwner && (
-                            <span className="text-[9px] bg-[#800000] text-[#ffd700] px-2 py-0.5 rounded border border-[#ffd700] font-bold">
+                            <span className="text-[8px] bg-[#800000] text-[#ffd700] px-1.5 py-0.5 rounded border border-[#ffd700] font-bold shrink-0 whitespace-nowrap">
                               LEADER 👑
                             </span>
                           )}
@@ -781,13 +779,13 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
                 </div>
 
                 {/* Message Log Box */}
-                <div className="bg-[#181320] border-2 border-amber-800 rounded-2xl p-3 h-64 overflow-y-auto space-y-2.5 shadow-inner">
+                <div className="bg-[#181320] border-2 border-amber-800 rounded-2xl p-3 h-44 sm:h-52 max-h-[35vh] overflow-y-auto space-y-2.5 shadow-inner">
                   {messages.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-center text-amber-300/50 space-y-1">
                       <span className="text-2xl">💬</span>
                       <p className="text-xs font-pixel">Belum ada pesan di Obrolan Squad.</p>
                       <p className="text-[10px] font-sans-clean text-amber-400/60">
-                        Kirim pesan pertama atau gunakan tombol Pesan Cepat di atas!
+                        Kirim pesan pertama atau gunakan Pesan Cepat!
                       </p>
                     </div>
                   ) : (
@@ -807,14 +805,14 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
                           className={`flex items-start gap-2 ${isMe ? 'flex-row-reverse' : ''}`}
                         >
                           <div
-                            className="w-7 h-7 rounded-full flex items-center justify-center text-sm border shadow shrink-0"
+                            className="w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center text-xs sm:text-sm border shadow shrink-0"
                             style={{ backgroundColor: exprData.bgHex, borderColor: exprData.borderColor }}
                           >
                             {exprData.emoji}
                           </div>
 
                           <div
-                            className={`max-w-[78%] rounded-2xl px-3 py-2 text-xs border shadow ${
+                            className={`max-w-[82%] rounded-2xl px-3 py-2 text-xs border shadow ${
                               isMe
                                 ? 'bg-[#800000] text-[#ffd700] border-[#ffd700] rounded-tr-none'
                                 : 'bg-[#281f33] text-amber-100 border-amber-700 rounded-tl-none'
@@ -848,12 +846,12 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
                     placeholder="Tulis pesan ke squad..."
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
-                    className="flex-1 bg-[#181320] border-2 border-amber-800 focus:border-amber-400 rounded-xl px-3 py-2 text-xs text-amber-100 placeholder-amber-400/40 outline-none transition-colors font-sans-clean"
+                    className="flex-1 bg-[#181320] border-2 border-amber-800 focus:border-amber-400 rounded-xl px-3 py-2 text-xs text-amber-100 placeholder-amber-400/40 outline-none transition-colors font-sans-clean min-w-0"
                   />
                   <button
                     type="submit"
                     disabled={!chatInput.trim()}
-                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-amber-950 font-bold text-xs rounded-xl border border-amber-200 shadow flex items-center gap-1 active:translate-y-0.5 transition-all font-pixel"
+                    className="px-3 sm:px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-amber-950 font-bold text-xs rounded-xl border border-amber-200 shadow flex items-center gap-1 active:translate-y-0.5 transition-all font-pixel shrink-0 whitespace-nowrap"
                   >
                     <span>Kirim</span>
                     <Send className="w-3.5 h-3.5" />
@@ -947,28 +945,30 @@ export const MultiplayerPartyModal: React.FC<MultiplayerPartyModalProps> = ({
           </div>
         )}
 
-        {/* Solo vs Multiplayer Guarantee Note */}
-        <div className="bg-[#181320] p-3 rounded-2xl border border-amber-900/80 grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px]">
-          <div className="flex items-start gap-2">
-            <Lock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-            <div>
-              <span className="text-amber-300 font-bold block">Progress Pribadi Mandiri</span>
-              <p className="text-amber-200/80 text-[10px]">
-                Jika Anda tidak join Squad / Invite siapa pun, semua titik Bakso & level progress Anda bersifat privat & eksklusif hanya untuk Anda.
-              </p>
+        {/* Solo vs Multiplayer Guarantee Note (shown when not in squad) */}
+        {!currentParty && (
+          <div className="bg-[#181320] p-3 rounded-2xl border border-amber-900/80 grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px]">
+            <div className="flex items-start gap-2">
+              <Lock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <span className="text-amber-300 font-bold block">Progress Pribadi Mandiri</span>
+                <p className="text-amber-200/80 text-[10px]">
+                  Jika Anda tidak join Squad / Invite siapa pun, semua titik Bakso & level progress Anda bersifat privat & eksklusif hanya untuk Anda.
+                </p>
+              </div>
             </div>
-          </div>
 
-          <div className="flex items-start gap-2">
-            <Globe className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-            <div>
-              <span className="text-emerald-300 font-bold block">Kolaborasi Berbagi Peta</span>
-              <p className="text-amber-200/80 text-[10px]">
-                Begitu di-invite ke Squad, semua anggota dapat menambah & menandai warung bakso favorit bersama di satu peta terintegrasi!
-              </p>
+            <div className="flex items-start gap-2">
+              <Globe className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              <div>
+                <span className="text-emerald-300 font-bold block">Kolaborasi Berbagi Peta</span>
+                <p className="text-amber-200/80 text-[10px]">
+                  Begitu di-invite ke Squad, semua anggota dapat menambah & menandai warung bakso favorit bersama di satu peta terintegrasi!
+                </p>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
