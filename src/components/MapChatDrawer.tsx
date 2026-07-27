@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Party, HunterProfile, ChatMessage } from '../types';
 import { EXPRESSIONS } from '../data/expressions';
 import { soundFx } from '../utils/audio';
-import { db, doc, collection, setDoc, addDoc, updateDoc, arrayUnion, onSnapshot } from '../lib/firebase';
+import { db, doc, collection, setDoc, addDoc, updateDoc, arrayUnion, onSnapshot, query, orderBy, limit } from '../lib/firebase';
 import { MessageSquare, Send, X, Users, Globe, Sparkles } from 'lucide-react';
 
 interface MapChatDrawerProps {
@@ -26,30 +26,34 @@ export const MapChatDrawer: React.FC<MapChatDrawerProps> = ({
   const [globalMessages, setGlobalMessages] = useState<ChatMessage[]>([]);
   const [squadMessages, setSquadMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
+  const [sendError, setSendError] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // 1. Listen to Realtime Global Public Messages via Single Document Room (Index-Free & Instant)
+  // 1. Listen to Realtime Global Public Messages via global_messages collection
   useEffect(() => {
     if (!isOpen) return;
 
     let unsubGlobal: (() => void) | null = null;
     try {
-      const roomRef = doc(db, 'global_chat', 'room');
+      const q = query(
+        collection(db, 'global_messages'),
+        orderBy('createdAt', 'asc'),
+        limit(60)
+      );
       unsubGlobal = onSnapshot(
-        roomRef,
-        (docSnap) => {
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            const msgs: ChatMessage[] = (data.messages || []) as ChatMessage[];
-            msgs.sort((a, b) => a.createdAt - b.createdAt);
-            setGlobalMessages(msgs);
-            setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-          }
+        q,
+        (snapshot) => {
+          const msgs: ChatMessage[] = [];
+          snapshot.forEach((docSnap) => {
+            msgs.push({ id: docSnap.id, ...docSnap.data() } as ChatMessage);
+          });
+          setGlobalMessages(msgs);
+          setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
         },
-        (err) => console.warn('Global chat room listener error:', err)
+        (err) => console.warn('Global chat listener error:', err)
       );
     } catch (err) {
-      console.warn('Error initiating global chat room listener:', err);
+      console.warn('Error initiating global chat listener:', err);
     }
 
     return () => {
@@ -112,6 +116,7 @@ export const MapChatDrawer: React.FC<MapChatDrawerProps> = ({
 
     soundFx.playClick();
     setChatInput('');
+    setSendError(null);
 
     const senderUid = currentUser?.uid || 'guest-' + Date.now();
     const senderName = profile.name || 'Hunter';
@@ -139,7 +144,7 @@ export const MapChatDrawer: React.FC<MapChatDrawerProps> = ({
           (m) => m.id === msgId || (m.text === msgText && m.senderName === senderName && Math.abs(m.createdAt - createdAt) < 2000)
         );
         if (exists) return prev;
-        return [...prev, newMsgObj];
+        return [...prev, newMsgObj as ChatMessage];
       });
     } else {
       setSquadMessages((prev) => {
@@ -147,7 +152,7 @@ export const MapChatDrawer: React.FC<MapChatDrawerProps> = ({
           (m) => m.id === msgId || (m.text === msgText && m.senderName === senderName && Math.abs(m.createdAt - createdAt) < 2000)
         );
         if (exists) return prev;
-        return [...prev, newMsgObj];
+        return [...prev, newMsgObj as ChatMessage];
       });
     }
 
@@ -158,20 +163,12 @@ export const MapChatDrawer: React.FC<MapChatDrawerProps> = ({
     // Save to Firestore Database
     if (activeChannel === 'global') {
       try {
-        await setDoc(
-          doc(db, 'global_chat', 'room'),
-          {
-            messages: arrayUnion(newMsgObj),
-          },
-          { merge: true }
-        );
-      } catch (err) {
-        console.warn('Error saving global chat message to room doc:', err);
-      }
-      try {
+        // Primary: store each message as a document in global_messages collection
         await addDoc(collection(db, 'global_messages'), newMsgObj);
-      } catch {
-        // ignore
+      } catch (err: any) {
+        console.warn('Error saving global chat message:', err);
+        setSendError('Gagal kirim pesan. Pastikan Anda sudah login Google untuk chat global.');
+        setTimeout(() => setSendError(null), 4000);
       }
     } else if (currentParty) {
       try {
@@ -346,6 +343,13 @@ export const MapChatDrawer: React.FC<MapChatDrawerProps> = ({
             )}
             <div ref={chatEndRef} />
           </div>
+
+          {/* Send Error Toast */}
+          {sendError && (
+            <div className="text-[10px] text-red-300 bg-red-950/80 border border-red-700 rounded-lg px-2.5 py-1.5 shrink-0">
+              ⚠️ {sendError}
+            </div>
+          )}
 
           {/* Form Input */}
           <form

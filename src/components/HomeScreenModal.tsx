@@ -226,7 +226,7 @@ export const HomeScreenModal: React.FC<HomeScreenModalProps> = ({
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(130px, 1fr))', gap:10 }}>
             {[
               { emoji:'🗺️', label:'Jelajah Peta RPG', sub:'Buka lokasi bakso.', col:'#ffd700', bg:'#800000', action: () => { soundFx.playSuccess(); onClose(); } },
-              { emoji:'⚔️', label:'Squad & Ranking', sub:'Multiplayer & ranking.', col:'#6ee7b7', bg:'#052e16', action: () => { soundFx.playClick(); onOpenMultiplayer(); } },
+              { emoji:'⚔️', label:'Squad & Ranking', sub:'Multiplayer & ranking.', col:'#6ee7b7', bg:'#052e16', action: () => { soundFx.playClick(); onClose(); onOpenMultiplayer(); } },
               { emoji:'➕', label:'Tambah Spot', sub:'+XP via GPS.', col:'#fcd34d', bg:'#451a03', action: () => { soundFx.playClick(); onClose(); onOpenAddSpot(); } },
               { emoji:'📜', label:`Jurnal (${totalSpots})`, sub:'Resensi & rating.', col:'#c4b5fd', bg:'#2e1065', action: () => { soundFx.playClick(); onClose(); onOpenJournal(); } },
               { emoji:'🎖️', label:'Badges & Piala', sub:'Lencana pencapaian.', col:'#fcd34d', bg:'#451a03', action: () => { soundFx.playClick(); onClose(); onOpenBadges(); } },
