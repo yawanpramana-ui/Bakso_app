@@ -39,6 +39,7 @@ export interface BaksoSpot {
   ownerId?: string;
   partyId?: string;
   addedByName?: string;
+  visitedUserIds?: string[];
 }
 
 export interface Achievement {
@@ -60,6 +61,9 @@ export interface HunterProfile {
   xp: number;
   nextLevelXp: number;
   favoriteType: string;
+  visitedSpotIds?: string[];
+  /** Fingerprint lokasi (format "lat3dp_lng3dp") yang sudah pernah menghasilkan XP penambahan spot */
+  earnedXpLocations?: string[];
 }
 
 export interface Party {

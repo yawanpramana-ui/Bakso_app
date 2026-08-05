@@ -1,5 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import L from 'leaflet';
+import 'leaflet.markercluster';
+import 'leaflet.markercluster/dist/MarkerCluster.css';
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import { BaksoSpot, ExpressionId } from '../types';
 import { EXPRESSIONS } from '../data/expressions';
 import { soundFx } from '../utils/audio';
@@ -7,8 +10,11 @@ import { soundFx } from '../utils/audio';
 interface BaksoMapProps {
   spots: BaksoSpot[];
   selectedSpot: BaksoSpot | null;
+  currentUser?: { uid: string; isAnonymous?: boolean } | null;
+  profile?: { visitedSpotIds?: string[] } | null;
   onSelectSpot: (spot: BaksoSpot) => void;
   onViewSpotDetail: (spot: BaksoSpot) => void;
+  onCheckInSpot?: (spot: BaksoSpot) => void;
   onDeleteSpot?: (id: string) => void;
   onMapClickLocation?: (lat: number, lng: number) => void;
   onCancelPickFromMap?: () => void;
@@ -21,8 +27,11 @@ interface BaksoMapProps {
 export const BaksoMap: React.FC<BaksoMapProps> = ({
   spots,
   selectedSpot,
+  currentUser,
+  profile,
   onSelectSpot,
   onViewSpotDetail,
+  onCheckInSpot,
   onDeleteSpot,
   onMapClickLocation,
   onCancelPickFromMap,
@@ -33,7 +42,7 @@ export const BaksoMap: React.FC<BaksoMapProps> = ({
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
-  const markersGroupRef = useRef<L.LayerGroup | null>(null);
+  const clusterGroupRef = useRef<any>(null);
   const pendingMarkerRef = useRef<L.Marker | null>(null);
 
   const onMapClickLocationRef = useRef(onMapClickLocation);
@@ -41,10 +50,48 @@ export const BaksoMap: React.FC<BaksoMapProps> = ({
     onMapClickLocationRef.current = onMapClickLocation;
   }, [onMapClickLocation]);
 
-  // Helper to create HTML DivIcon for Character Head Map Markers
-  const createCharacterHeadIcon = (expression: ExpressionId, rating: number, isSelected: boolean) => {
+  // Helper to create HTML DivIcon for Character Head Map Markers (Visited vs Fog of War)
+  const createCharacterHeadIcon = (
+    expression: ExpressionId,
+    rating: number,
+    isSelected: boolean,
+    isVisited: boolean
+  ) => {
     const exprData = EXPRESSIONS[expression] || EXPRESSIONS.happy;
 
+    if (!isVisited) {
+      // Fog of war unvisited spot icon styling
+      const fogHtml = `
+        <div class="relative group cursor-pointer transform transition-transform duration-200 ${
+          isSelected ? 'scale-125 z-50 animate-bounce' : 'hover:scale-115 hover:z-40'
+        }" style="filter: grayscale(80%) opacity(0.75);">
+          <!-- Pixel Head Frame (Fogged) -->
+          <div class="w-11 h-11 rounded-2xl flex items-center justify-center shadow-md border-3 border-gray-600 p-1 transition-all bg-slate-800">
+            <div class="w-full h-full flex items-center justify-center text-xl select-none opacity-70">
+              🌫️
+            </div>
+          </div>
+          
+          <!-- Fog Badge -->
+          <div class="absolute -top-2 -right-2 bg-slate-950 text-slate-300 text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-slate-600 shadow">
+            ☁️ Fog
+          </div>
+
+          <!-- Bottom Pin Point -->
+          <div class="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-slate-800 mx-auto -mt-0.5"></div>
+        </div>
+      `;
+
+      return L.divIcon({
+        html: fogHtml,
+        className: 'bakso-character-marker-fog',
+        iconSize: [44, 52],
+        iconAnchor: [22, 52],
+        popupAnchor: [0, -48],
+      });
+    }
+
+    // Visited / Owned spot icon
     const htmlContent = `
       <div class="relative group cursor-pointer transform transition-transform duration-200 ${
         isSelected ? 'scale-125 z-50 animate-bounce' : 'hover:scale-115 hover:z-40'
@@ -111,7 +158,7 @@ export const BaksoMap: React.FC<BaksoMapProps> = ({
     return !isNaN(numLat) && !isNaN(numLng) && isFinite(numLat) && isFinite(numLng);
   };
 
-  // Initialize Map
+  // Initialize Map with Marker Clustering
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
@@ -149,8 +196,24 @@ export const BaksoMap: React.FC<BaksoMapProps> = ({
           }
         ).addTo(map);
 
-        const markersGroup = L.layerGroup().addTo(map);
-        markersGroupRef.current = markersGroup;
+        // Marker Cluster Group with Retro RPG Styling
+        const clusterGroup = (L as any).markerClusterGroup({
+          spiderfyOnMaxZoom: true,
+          showCoverageOnHover: false,
+          zoomToBoundsOnClick: true,
+          iconCreateFunction: (cluster: any) => {
+            const count = cluster.getChildCount();
+            return L.divIcon({
+              html: `<div class="w-10 h-10 rounded-2xl bg-[#800000] border-2 border-[#ffd700] text-[#ffd700] font-pixel font-bold text-xs flex items-center justify-center shadow-2xl drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)] transition-transform hover:scale-110 active:scale-95 cursor-pointer">+${count}</div>`,
+              className: 'bakso-cluster-icon',
+              iconSize: [40, 40],
+              iconAnchor: [20, 20],
+            });
+          },
+        });
+
+        map.addLayer(clusterGroup);
+        clusterGroupRef.current = clusterGroup;
         mapRef.current = map;
 
         // Invalidate size on initial mount after frame layout
@@ -227,12 +290,12 @@ export const BaksoMap: React.FC<BaksoMapProps> = ({
     }
   }, [center]);
 
-  // Render Map Spot Markers
+  // Render Map Spot Markers into MarkerClusterGroup
   useEffect(() => {
-    if (!mapRef.current || !markersGroupRef.current) return;
+    if (!mapRef.current || !clusterGroupRef.current) return;
     const map = mapRef.current;
-    const markersGroup = markersGroupRef.current;
-    markersGroup.clearLayers();
+    const clusterGroup = clusterGroupRef.current;
+    clusterGroup.clearLayers();
 
     const safeSpots = Array.isArray(spots) ? spots : [];
     safeSpots.forEach((spot) => {
@@ -241,8 +304,20 @@ export const BaksoMap: React.FC<BaksoMapProps> = ({
       const spotLat = Number(spot.lat);
       const spotLng = Number(spot.lng);
 
+      const isVisited = Boolean(
+        currentUser?.uid &&
+          (spot.ownerId === currentUser.uid ||
+            (spot.visitedUserIds && spot.visitedUserIds.includes(currentUser.uid)) ||
+            (profile?.visitedSpotIds && profile.visitedSpotIds.includes(spot.id)))
+      );
+
       const isSelected = selectedSpot?.id === spot.id;
-      const icon = createCharacterHeadIcon(spot.characterExpression, spot.rating, isSelected);
+      const icon = createCharacterHeadIcon(
+        spot.characterExpression,
+        spot.rating,
+        isSelected,
+        isVisited
+      );
 
       try {
         const marker = L.marker([spotLat, spotLng], { icon });
@@ -253,8 +328,12 @@ export const BaksoMap: React.FC<BaksoMapProps> = ({
           <div class="p-3 bg-[#5d4037] text-[#fdf6e3] rounded-lg max-w-[280px]">
             <!-- Header Tag -->
             <div class="flex items-center justify-between gap-2 border-b border-[#ffd700]/40 pb-2 mb-2">
-              <span class="text-[10px] font-bold font-pixel uppercase px-2 py-0.5 rounded bg-[#800000] text-[#ffd700] border border-[#ffd700]">
-                ${exprData.emoji} ${exprData.name}
+              <span class="text-[10px] font-bold font-pixel uppercase px-2 py-0.5 rounded ${
+                isVisited
+                  ? 'bg-[#800000] text-[#ffd700] border border-[#ffd700]'
+                  : 'bg-slate-900 text-slate-300 border border-slate-600'
+              }">
+                ${isVisited ? `${exprData.emoji} ${exprData.name}` : '🌫️ Fog of War'}
               </span>
               <span class="text-xs font-pixel text-[#ffd700]">
                 🥣 ${spot.rating}/5
@@ -287,14 +366,24 @@ export const BaksoMap: React.FC<BaksoMapProps> = ({
             </p>
 
             <!-- Action Buttons -->
-            <div class="flex items-center gap-2">
-              <button id="view-detail-btn-${spot.id}" class="flex-1 py-1.5 px-2 bg-[#800000] hover:bg-red-900 text-[#ffd700] border border-[#ffd700] font-pixel font-bold text-[10px] rounded transition-all active:translate-y-0.5 flex items-center justify-center gap-1 shadow">
-                📜 Detail
-              </button>
+            <div class="flex flex-col gap-1.5">
+              <div class="flex items-center gap-2">
+                <button id="view-detail-btn-${spot.id}" class="flex-1 py-1.5 px-2 bg-[#800000] hover:bg-red-900 text-[#ffd700] border border-[#ffd700] font-pixel font-bold text-[10px] rounded transition-all active:translate-y-0.5 flex items-center justify-center gap-1 shadow">
+                  📜 Detail
+                </button>
+                ${
+                  onDeleteSpot && (spot.ownerId === currentUser?.uid || !spot.ownerId)
+                    ? `<button id="delete-btn-${spot.id}" class="py-1.5 px-2 bg-red-950 hover:bg-red-900 text-red-200 border border-red-600 font-pixel font-bold text-[10px] rounded transition-all active:translate-y-0.5 flex items-center justify-center gap-1 shadow">
+                        🗑️ Hapus
+                       </button>`
+                    : ''
+                }
+              </div>
+
               ${
-                onDeleteSpot
-                  ? `<button id="delete-btn-${spot.id}" class="py-1.5 px-2 bg-red-950 hover:bg-red-900 text-red-200 border border-red-600 font-pixel font-bold text-[10px] rounded transition-all active:translate-y-0.5 flex items-center justify-center gap-1 shadow">
-                      🗑️ Hapus
+                !isVisited && onCheckInSpot
+                  ? `<button id="checkin-btn-${spot.id}" class="w-full py-1.5 px-2 bg-emerald-800 hover:bg-emerald-700 text-emerald-100 border border-emerald-400 font-pixel font-bold text-[10px] rounded transition-all active:translate-y-0.5 flex items-center justify-center gap-1 shadow">
+                      ✨ Check-in di Spot Ini (+100 XP)
                      </button>`
                   : ''
               }
@@ -332,9 +421,20 @@ export const BaksoMap: React.FC<BaksoMapProps> = ({
               }
             };
           }
+          const checkInBtn = document.getElementById(`checkin-btn-${spot.id}`);
+          if (checkInBtn) {
+            checkInBtn.onclick = (e) => {
+              e.stopPropagation();
+              soundFx.playSuccess();
+              if (onCheckInSpot) {
+                onCheckInSpot(spot);
+                map.closePopup();
+              }
+            };
+          }
         });
 
-        markersGroup.addLayer(marker);
+        clusterGroup.addLayer(marker);
       } catch {
         // Skip invalid marker creation safely
       }
@@ -362,7 +462,7 @@ export const BaksoMap: React.FC<BaksoMapProps> = ({
         // ignore fallback errors
       }
     }
-  }, [spots, selectedSpot, pendingCoords]);
+  }, [spots, selectedSpot, pendingCoords, currentUser, profile]);
 
   return (
     <div className={`relative w-full h-full overflow-hidden ${isAddingMode ? 'cursor-crosshair' : ''}`}>

@@ -14,6 +14,9 @@ interface SpotListDrawerProps {
   onViewSpotDetail: (spot: BaksoSpot) => void;
   onAddNewSpotClick: () => void;
   onDeleteSpot?: (id: string) => void;
+  currentUser?: { uid: string } | null;
+  profile?: { visitedSpotIds?: string[] } | null;
+  currentPartyId?: string | null;
 }
 
 export const SpotListDrawer: React.FC<SpotListDrawerProps> = ({
@@ -24,6 +27,9 @@ export const SpotListDrawer: React.FC<SpotListDrawerProps> = ({
   onViewSpotDetail,
   onAddNewSpotClick,
   onDeleteSpot,
+  currentUser,
+  profile,
+  currentPartyId,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string>('all');
@@ -37,7 +43,21 @@ export const SpotListDrawer: React.FC<SpotListDrawerProps> = ({
   const allTags = Array.from(new Set(spots.flatMap((s) => s.tags || [])));
 
   // Filter & Sort Spots
-  const filteredSpots = spots
+  // Hanya tampilkan spot yang:
+  // - Dibuat oleh user saat ini (ownerId cocok), ATAU
+  // - Sudah pernah dikunjungi (check-in) oleh user saat ini
+  const myUid = currentUser?.uid;
+  const accessibleSpots = spots.filter((spot) => {
+    if (!myUid) return true; // fallback: tampilkan semua jika belum login
+    const isOwner = spot.ownerId === myUid || !spot.ownerId;
+    const isVisitedViaSpot = spot.visitedUserIds?.includes(myUid);
+    const isVisitedViaProfile = profile?.visitedSpotIds?.includes(spot.id);
+    // Spot dari squad member (partyId cocok) langsung masuk jurnal
+    const isSquadSpot = currentPartyId && spot.partyId === currentPartyId;
+    return isOwner || isVisitedViaSpot || isVisitedViaProfile || isSquadSpot;
+  });
+
+  const filteredSpots = accessibleSpots
     .filter((spot) => {
       const matchesSearch =
         spot.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -67,6 +87,7 @@ export const SpotListDrawer: React.FC<SpotListDrawerProps> = ({
           <h3 className="text-sm font-pixel text-amber-300">
             JURNAL SPOT BAKSO ({filteredSpots.length})
           </h3>
+          <p className="text-[10px] text-amber-500 font-arcade">Milik & yang sudah dikunjungi</p>
         </div>
         <button
           onClick={() => {
@@ -210,7 +231,8 @@ export const SpotListDrawer: React.FC<SpotListDrawerProps> = ({
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0 ml-auto">
-                    {onDeleteSpot && (
+                    {/* Tombol hapus hanya tampil untuk pemilik spot */}
+                  {onDeleteSpot && (spot.ownerId === currentUser?.uid || !spot.ownerId) && (
                       deletingSpotId === spot.id ? (
                         <div className="flex items-center gap-1 bg-red-950 p-1 rounded-lg border border-red-500">
                           <span className="text-[9px] text-red-200 font-pixel">Hapus?</span>

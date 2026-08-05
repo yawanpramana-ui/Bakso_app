@@ -11,9 +11,12 @@ import { HomeScreenModal } from './components/HomeScreenModal';
 import { SystemBadgesModal } from './components/SystemBadgesModal';
 import { LevelUpModal } from './components/LevelUpModal';
 import { MultiplayerPartyModal } from './components/MultiplayerPartyModal';
+import { ProximityDialogModal } from './components/ProximityDialogModal';
+import { CheckInNoticeModal, NoticeModalData } from './components/CheckInNoticeModal';
 import { SplashScreen } from './components/SplashScreen';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { soundFx } from './utils/audio';
+import { calculateHaversineDistance, findNearbySpot50m } from './utils/geo';
 import {
   auth,
   db,
@@ -95,12 +98,17 @@ export default function App() {
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState<boolean>(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
-  const [editingSpot, setEditingSpot] = useState<BaksoSpot | null>(null);
   const [isJournalOpen, setIsJournalOpen] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isScanlinesOn, setIsScanlinesOn] = useState<boolean>(true);
   const [gpsNotice, setGpsNotice] = useState<string | null>(null);
+  const [isAddingMode, setIsAddingMode] = useState(false);
+  const [pendingCoords, setPendingCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [editingSpot, setEditingSpot] = useState<BaksoSpot | null>(null);
   const [gpsConfirmCoords, setGpsConfirmCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [nearbySpotDialog, setNearbySpotDialog] = useState<{ spot: BaksoSpot; distance: number } | null>(null);
+  const [checkInNotice, setCheckInNotice] = useState<NoticeModalData | null>(null);
+  const [lastCheckInTargetSpot, setLastCheckInTargetSpot] = useState<BaksoSpot | null>(null);
   const [levelUpInfo, setLevelUpInfo] = useState<{ newLevel: number; newTitle: string } | null>(null);
   const [isMapChatOpen, setIsMapChatOpen] = useState<boolean>(false);
 
@@ -127,11 +135,11 @@ export default function App() {
   const knownSpotIdsRef = React.useRef<Set<string>>(new Set());
   const knownMsgIdsRef = React.useRef<Set<string>>(new Set());
   const knownGlobalMsgIdsRef = React.useRef<Set<string>>(new Set());
+  // Ref agar addXp bisa dipanggil dari useEffect tanpa stale closure
+  const addXpRef = React.useRef<(amount: number) => void>(() => {});
 
   // Map state
   const [mapCenter, setMapCenter] = useState<[number, number]>([-6.2088, 106.8456]);
-  const [pendingCoords, setPendingCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [isAddingMode, setIsAddingMode] = useState<boolean>(false);
   const isAddingModeRef = React.useRef(isAddingMode);
 
   useEffect(() => {
@@ -186,6 +194,8 @@ export default function App() {
               title: getTitleForLevel(userLevel),
               favoriteType: uData.favoriteType || prev.favoriteType,
               avatarExpression: uData.avatarExpression || prev.avatarExpression,
+              // Sync data anti-farming lokasi dari Firestore
+              earnedXpLocations: uData.earnedXpLocations || prev.earnedXpLocations || [],
             }));
           } else {
             await setDoc(userRef, {
@@ -210,6 +220,8 @@ export default function App() {
                 xp: uData.xp || 0,
                 nextLevelXp: uData.nextLevelXp || prev.nextLevelXp || userLevel * 100 + 200,
                 title: getTitleForLevel(userLevel),
+                // Sync data anti-farming dari Firestore secara realtime
+                earnedXpLocations: uData.earnedXpLocations || prev.earnedXpLocations || [],
               }));
 
               if (uData.currentPartyId) {
@@ -263,9 +275,8 @@ export default function App() {
 
     try {
       const spotsRef = collection(db, 'spots');
-      const q = currentParty?.id
-        ? query(spotsRef, where('partyId', '==', currentParty.id))
-        : query(spotsRef, where('ownerId', '==', currentUser.uid));
+      // Load all global public BaksoSpots across Indonesia
+      const q = query(spotsRef);
 
       const unsubscribe = onSnapshot(
         q,
@@ -287,11 +298,13 @@ export default function App() {
 
             if (newlyAdded) {
               soundFx.playSuccess();
+              // Award +50 XP (setengah dari penambah spot) ke anggota squad lainnya
+              addXpRef.current(50);
               setSquadNotice({
                 id: newlyAdded.id,
                 type: 'spot',
                 title: '🍲 SPOT BAKSO BARU DISINKRONKAN!',
-                message: `${newlyAdded.addedByName || 'Teman Squad'} menambahkan "${newlyAdded.name}"!`,
+                message: `${newlyAdded.addedByName || 'Teman Squad'} menambahkan "${newlyAdded.name}"! +50 XP untukmu! 🎉`,
                 spot: newlyAdded,
                 timestamp: Date.now(),
               });
@@ -574,6 +587,150 @@ export default function App() {
     }
   };
 
+  // Check-in at a spot (verifies GPS distance <= 150m, adds user to visitedUserIds, opens Fog of War, awards +100 XP)
+  const handleCheckInSpot = async (spotToVisit: BaksoSpot, skipGpsCheck: boolean = false) => {
+    if (!currentUser) return;
+
+    const isAlreadyVisited = Boolean(
+      spotToVisit.ownerId === currentUser.uid ||
+        (spotToVisit.visitedUserIds && spotToVisit.visitedUserIds.includes(currentUser.uid)) ||
+        (profile.visitedSpotIds && profile.visitedSpotIds.includes(spotToVisit.id))
+    );
+
+    if (isAlreadyVisited) {
+      soundFx.playClick();
+      setSelectedSpot(spotToVisit);
+      setIsDetailModalOpen(true);
+      return;
+    }
+
+    const performCheckIn = async () => {
+      try {
+        const updatedVisitedUserIds = Array.from(
+          new Set([...(spotToVisit.visitedUserIds || []), currentUser.uid])
+        );
+
+        const updatedSpot: BaksoSpot = {
+          ...spotToVisit,
+          visitedUserIds: updatedVisitedUserIds,
+        };
+
+        // 1. Update Firestore spot document with arrayUnion
+        try {
+          await updateDoc(doc(db, 'spots', spotToVisit.id), {
+            visitedUserIds: arrayUnion(currentUser.uid),
+          });
+        } catch (e) {
+          console.warn('Firestore updateDoc warning:', e);
+        }
+
+        // 2. Award +100 XP for checking in / revealing Fog of War
+        addXp(100);
+
+        // 3. Update profile visitedSpotIds locally & in storage
+        setProfile((prev) => ({
+          ...prev,
+          visitedSpotIds: Array.from(new Set([...(prev.visitedSpotIds || []), spotToVisit.id])),
+        }));
+
+        // 4. Update local spots list & selectedSpot
+        setSpots((prev) =>
+          prev.map((s) => (s.id === spotToVisit.id ? updatedSpot : s))
+        );
+        setSelectedSpot(updatedSpot);
+
+        soundFx.playSuccess();
+        setCheckInNotice({
+          type: 'success',
+          title: 'CHECK-IN BERHASIL!',
+          subtitle: 'Status Fog of War: VISITED 🍲',
+          spotName: spotToVisit.name,
+          message: `Selamat! Kedai "${spotToVisit.name}" kini telah resmi kamu kunjungi. Status lokasi di peta berubah dari Fog of War 🌫️ menjadi Visited penuh warna!`,
+          xpGained: 100,
+        });
+
+        setIsDetailModalOpen(true);
+      } catch (err) {
+        console.warn('Error checking in at spot:', err);
+      }
+    };
+
+    if (skipGpsCheck) {
+      await performCheckIn();
+      return;
+    }
+
+    const spotLat = Number(spotToVisit.lat);
+    const spotLng = Number(spotToVisit.lng);
+
+    if (isNaN(spotLat) || isNaN(spotLng)) {
+      await performCheckIn();
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      await performCheckIn();
+      return;
+    }
+
+    const processPosition = async (userLat: number, userLng: number) => {
+      const distanceMeters = Math.round(
+        calculateHaversineDistance(userLat, userLng, spotLat, spotLng)
+      );
+
+      const MAX_CHECKIN_RADIUS = 250; // Increased buffer radius to 250m for GPS/Wi-Fi drift
+
+      if (distanceMeters <= MAX_CHECKIN_RADIUS) {
+        await performCheckIn();
+      } else {
+        soundFx.playClick();
+        const distanceStr =
+          distanceMeters >= 1000
+            ? `${(distanceMeters / 1000).toFixed(1)} km`
+            : `${distanceMeters} meter`;
+
+        setLastCheckInTargetSpot(spotToVisit);
+
+        setCheckInNotice({
+          type: 'error',
+          title: 'TERLALU JAUH DARI KEDAI!',
+          subtitle: 'Verifikasi Lokasi GPS',
+          spotName: spotToVisit.name,
+          distanceStr,
+          message: `Posisi GPS kamu saat ini berjarak ${distanceStr} dari kedai ini.\n\nUntuk melakukan Check-in (+100 XP), kamu disarankan berada di sekitar lokasi kedai (maksimal ${MAX_CHECKIN_RADIUS} meter). Jika GPS kamu kurang akurat, kamu dapat mengklik tombol "Check-in di Titik Ini" di bawah.`,
+        });
+      }
+    };
+
+    // Dual-stage geolocation check (High Accuracy -> Low Accuracy Fallback)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        processPosition(pos.coords.latitude, pos.coords.longitude);
+      },
+      () => {
+        // Fallback to low accuracy (Wi-Fi/Cellular IP) if high accuracy times out/fails
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            processPosition(pos.coords.latitude, pos.coords.longitude);
+          },
+          () => {
+            // If GPS is disabled or blocked, allow check-in with fallback option
+            setLastCheckInTargetSpot(spotToVisit);
+            setCheckInNotice({
+              type: 'warning',
+              title: 'AKSES GPS TERKUNCI / TIMEOUT',
+              subtitle: 'Verifikasi Lokasi',
+              spotName: spotToVisit.name,
+              message: 'Gagal membaca posisi GPS dari browser/HP. Kamu dapat mengklik tombol "Check-in di Titik Ini" di bawah untuk tetap melanjutkan Check-in.',
+            });
+          },
+          { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+        );
+      },
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+    );
+  };
+
   const handleLeaveParty = async () => {
     if (!currentUser || !currentParty) return;
     const partyId = currentParty.id;
@@ -713,6 +870,8 @@ export default function App() {
       return updated;
     });
   };
+  // Selalu sync ref ke fungsi terbaru agar closure di useEffect tidak stale
+  addXpRef.current = addXp;
 
   // Save new spot or update existing spot
   const handleSaveSpot = async (
@@ -769,8 +928,28 @@ export default function App() {
     }
 
     if (!isEdit && isGps) {
-      // Award +100 XP ONLY for new spots added via authentic GPS location
-      addXp(100);
+      // Fingerprint lokasi dengan presisi ~100m (3 desimal = ~111m di ekuator)
+      const locKey = `${newSpot.lat.toFixed(3)}_${newSpot.lng.toFixed(3)}`;
+      const alreadyEarned = profile.earnedXpLocations?.includes(locKey);
+
+      if (!alreadyEarned) {
+        // Award +100 XP hanya jika lokasi ini belum pernah menghasilkan XP
+        addXp(100);
+
+        // Catat fingerprint ke profile lokal
+        setProfile((prev) => ({
+          ...prev,
+          earnedXpLocations: Array.from(new Set([...(prev.earnedXpLocations || []), locKey])),
+        }));
+
+        // Simpan ke Firestore agar persisten (tidak bisa di-reset dengan hapus spot)
+        if (currentUser) {
+          updateDoc(doc(db, 'users', currentUser.uid), {
+            earnedXpLocations: arrayUnion(locKey),
+          }).catch(() => {});
+        }
+      }
+      // Jika alreadyEarned: diam-diam skip XP — tidak ada notifikasi error, hanya tidak bertambah
     }
   };
 
@@ -800,6 +979,13 @@ export default function App() {
   // Handle Pick Location on Map
   const handleMapClickLocation = (lat: number, lng: number) => {
     if (isAddingModeRef.current && isValidCoord(lat, lng)) {
+      // Cek radius 100m sebelum membuka form tambah — jika sudah ada spot, blokir
+      const nearby = findNearbySpot50m(lat, lng, spots, undefined, 100);
+      if (nearby) {
+        setIsAddingMode(false);
+        setNearbySpotDialog(nearby);
+        return;
+      }
       setPendingCoords({ lat, lng });
       setIsAddingMode(false);
       setIsAddModalOpen(true);
@@ -836,6 +1022,14 @@ export default function App() {
 
         if (isValidCoord(userLat, userLng)) {
           setGpsNotice(null);
+          // Cek radius 100m: jika sudah ada spot dekat lokasi GPS, blokir tambah
+          const nearbyFromGps = findNearbySpot50m(userLat, userLng, spots, undefined, 100);
+          if (nearbyFromGps) {
+            setMapCenter([userLat, userLng]);
+            setNearbySpotDialog(nearbyFromGps);
+            soundFx.playClick();
+            return;
+          }
           // 1. Pan map directly to current location
           setMapCenter([userLat, userLng]);
           setPendingCoords({ lat: userLat, lng: userLng });
@@ -875,6 +1069,8 @@ export default function App() {
       xp: 0,
       nextLevelXp: 100,
       favoriteType: 'Bakso Urat Jumbo',
+      visitedSpotIds: [],
+      earnedXpLocations: [], // Reset anti-farming: bisa dapat XP lagi di lokasi lama
     };
 
     setSpots([]);
@@ -885,18 +1081,31 @@ export default function App() {
     setSelectedSpot(null);
 
     if (currentUser) {
-      setDoc(
-        doc(db, 'users', currentUser.uid),
-        {
-          name: defaultProfile.name,
-          level: 1,
-          xp: 0,
-          title: defaultProfile.title,
-        },
-        { merge: true }
-      ).catch(() => {});
+      // setDoc tanpa merge agar earnedXpLocations & visitedSpotIds benar-benar terhapus di Firestore
+      setDoc(doc(db, 'users', currentUser.uid), {
+        uid: currentUser.uid,
+        name: defaultProfile.name,
+        level: 1,
+        xp: 0,
+        nextLevelXp: 100,
+        title: defaultProfile.title,
+        visitedSpotIds: [],
+        earnedXpLocations: [],
+        createdAt: new Date().toISOString(),
+      }).catch(() => {});
     }
   };
+
+  // Hitung spot yang dapat diakses user (milik sendiri / sudah check-in / spot squad)
+  const myUid = currentUser?.uid;
+  const accessibleSpotCount = spots.filter((spot) => {
+    if (!myUid) return true;
+    const isOwner = spot.ownerId === myUid || !spot.ownerId;
+    const isVisitedViaSpot = spot.visitedUserIds?.includes(myUid);
+    const isVisitedViaProfile = profile?.visitedSpotIds?.includes(spot.id);
+    const isSquadSpot = currentParty?.id && spot.partyId === currentParty.id;
+    return isOwner || isVisitedViaSpot || isVisitedViaProfile || isSquadSpot;
+  }).length;
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#120e17] font-sans-clean select-none">
@@ -917,7 +1126,7 @@ export default function App() {
       {/* Top HUD Navigation Bar */}
       <BaksoHudNavbar
         profile={profile}
-        spotCount={spots.length}
+        spotCount={accessibleSpotCount}
         partyName={currentParty?.name}
         currentUser={currentUser}
         onOpenMultiplayer={() => setIsMultiplayerModalOpen(true)}
@@ -1017,6 +1226,8 @@ export default function App() {
         <BaksoMap
           spots={spots}
           selectedSpot={selectedSpot}
+          currentUser={currentUser}
+          profile={profile}
           onSelectSpot={(spot) => {
             setSelectedSpot(spot);
             if (isValidCoord(spot.lat, spot.lng)) {
@@ -1027,6 +1238,7 @@ export default function App() {
             setSelectedSpot(spot);
             setIsDetailModalOpen(true);
           }}
+          onCheckInSpot={handleCheckInSpot}
           onDeleteSpot={handleDeleteSpot}
           onMapClickLocation={handleMapClickLocation}
           onCancelPickFromMap={() => {
@@ -1111,8 +1323,37 @@ export default function App() {
           onPickFromMap={handleStartPickFromMap}
           editingSpot={editingSpot}
           existingSpots={spots}
+          onProximityDetected={(nearby) => setNearbySpotDialog(nearby)}
         />
       </ErrorBoundary>
+
+      {/* Proximity Anti-Duplication Check-in Modal */}
+      <ProximityDialogModal
+        isOpen={Boolean(nearbySpotDialog)}
+        onClose={() => setNearbySpotDialog(null)}
+        nearbySpot={nearbySpotDialog}
+        onCheckIn={(spot) => {
+          handleCheckInSpot(spot, true);
+          setNearbySpotDialog(null);
+        }}
+      />
+
+      {/* In-App RPG Check-In Notice Modal (Replaces browser alert) */}
+      <CheckInNoticeModal
+        isOpen={Boolean(checkInNotice)}
+        onClose={() => {
+          setCheckInNotice(null);
+          setLastCheckInTargetSpot(null);
+        }}
+        notice={checkInNotice}
+        onForceCheckIn={
+          lastCheckInTargetSpot
+            ? () => {
+                handleCheckInSpot(lastCheckInTargetSpot, true);
+              }
+            : undefined
+        }
+      />
 
       {/* "Lihat Detail Kunjungan" Modal */}
       <SpotDetailModal
@@ -1120,6 +1361,7 @@ export default function App() {
         isOpen={isDetailModalOpen}
         onClose={() => setIsDetailModalOpen(false)}
         onDeleteSpot={handleDeleteSpot}
+        currentUser={currentUser}
         onEditSpot={(spot) => {
           setEditingSpot(spot);
           setIsDetailModalOpen(false);
@@ -1157,6 +1399,9 @@ export default function App() {
         onClose={() => setIsJournalOpen(false)}
         spots={spots}
         onDeleteSpot={handleDeleteSpot}
+        currentUser={currentUser}
+        profile={profile}
+        currentPartyId={currentParty?.id}
         onSelectSpot={(spot) => {
           setSelectedSpot(spot);
           if (spot && isValidCoord(spot.lat, spot.lng)) {

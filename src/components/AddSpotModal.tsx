@@ -4,7 +4,7 @@ import { EXPRESSION_LIST } from '../data/expressions';
 import { CharacterAvatar } from './CharacterAvatar';
 import { BaksoRating } from './BaksoRating';
 import { soundFx } from '../utils/audio';
-import { findNearbySpot } from '../utils/distance';
+import { findNearbySpot50m } from '../utils/geo';
 import { X, MapPin, Upload, Image as ImageIcon, Sparkles, AlertCircle, Navigation, Loader2 } from 'lucide-react';
 
 interface AddSpotModalProps {
@@ -15,6 +15,7 @@ interface AddSpotModalProps {
   onPickFromMap: () => void;
   editingSpot?: BaksoSpot | null;
   existingSpots?: BaksoSpot[];
+  onProximityDetected?: (nearby: { spot: BaksoSpot; distance: number }) => void;
 }
 
 // Preset photos if user wants quick sample photo or hasn't uploaded one
@@ -33,6 +34,7 @@ export const AddSpotModal: React.FC<AddSpotModalProps> = ({
   onPickFromMap,
   editingSpot,
   existingSpots = [],
+  onProximityDetected,
 }) => {
   if (!isOpen) return null;
 
@@ -206,11 +208,16 @@ export const AddSpotModal: React.FC<AddSpotModalProps> = ({
     const safeLat = isValidCoord(lat, lng) ? Number(lat) : -6.2088;
     const safeLng = isValidCoord(lat, lng) ? Number(lng) : 106.8456;
 
-    // Check 200m Proximity Limit to avoid duplicates in the same area
-    const nearby = findNearbySpot(safeLat, safeLng, existingSpots, editingSpot?.id, 200);
-    if (nearby) {
+    // Cek radius 100m — jika sudah ada spot di dekat sini, blokir penambahan
+    const nearby = findNearbySpot50m(safeLat, safeLng, existingSpots, editingSpot?.id, 100);
+    if (nearby && !editingSpot) {
+      if (onProximityDetected) {
+        onProximityDetected(nearby);
+        onClose();
+        return;
+      }
       setErrorMsg(
-        `🚫 TERLALU DEKAT! Sudah ada kedai "${nearby.spot.name}" dalam radius ${nearby.distance} meter dari koordinat ini. Minimal jarak antar tempat bakso adalah 200 meter!`
+        `🚫 SPOT SUDAH ADA! Kedai "${nearby.spot.name}" sudah terdaftar di titik ini (berjarak ${nearby.distance} meter). Silakan Check-in di spot tersebut!`
       );
       return;
     }

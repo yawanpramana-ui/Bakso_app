@@ -13,6 +13,7 @@ interface SpotDetailModalProps {
   onDeleteSpot?: (id: string) => void;
   onEditSpot?: (spot: BaksoSpot) => void;
   onFlyToMap?: (lat: number, lng: number) => void;
+  currentUser?: { uid: string } | null;
 }
 
 export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
@@ -22,7 +23,10 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
   onDeleteSpot,
   onEditSpot,
   onFlyToMap,
+  currentUser,
 }) => {
+  // Hanya pemilik spot (ownerId === uid) atau spot tanpa owner yang boleh hapus
+  const canDelete = onDeleteSpot && spot && (spot.ownerId === currentUser?.uid || !spot.ownerId);
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
   const [copiedToast, setCopiedToast] = React.useState(false);
 
@@ -235,14 +239,14 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
                 </button>
               )}
 
-              {onDeleteSpot ? (
+              {canDelete ? (
                 showDeleteConfirm ? (
                   <div className="flex items-center gap-2 bg-red-950 p-2 rounded-xl border-2 border-red-500 animate-fadeIn flex-wrap">
                     <span className="text-xs text-red-200 font-pixel font-bold whitespace-nowrap">Hapus Spot Ini?</span>
                     <button
                       onClick={() => {
                         soundFx.playClick();
-                        onDeleteSpot(spot.id);
+                        onDeleteSpot!(spot.id);
                         setShowDeleteConfirm(false);
                         onClose();
                       }}
